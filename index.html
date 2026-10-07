@@ -569,6 +569,41 @@
     .att-session-row > :nth-child(3){ grid-column:1; }
   }
 
+  /* ---- settings gear ---- */
+  .tab[hidden]{ display:none; }
+  .gear-wrap{ position:relative; }
+  .gear-btn{ border:1px solid var(--border-strong); background:var(--surface); width:36px; height:36px; border-radius:50%; cursor:pointer; font-size:17px; line-height:1; color:var(--text-soft); }
+  .gear-btn:hover{ color:var(--text); border-color:var(--text-faint); }
+  .gear-btn.active{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .gear-menu{ display:none; position:absolute; top:42px; inset-inline-start:0; min-width:170px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:6px; z-index:60; }
+  .gear-menu.open{ display:block; }
+  .gear-menu button{ display:block; width:100%; text-align:start; border:none; background:transparent; padding:8px 12px; border-radius:var(--radius-sm); cursor:pointer; font-family:var(--display); font-size:13.5px; font-weight:600; color:var(--text); }
+  .gear-menu button:hover{ background:var(--bg); }
+  .gear-menu button.active{ background:var(--accent-soft); color:var(--accent-dark); }
+
+  /* ---- org chart: minor (under 18) marker ---- */
+  .minor-badge{ font-size:14px; margin-inline-start:3px; }
+
+  /* ---- courses module additions ---- */
+  .att-warn{ font-size:10.5px; font-weight:700; color:var(--replaced); background:var(--replaced-soft); border-radius:4px; padding:1px 5px; margin-top:3px; white-space:normal; line-height:1.3; }
+  .att-table td.att-na{ color:var(--text-faint); font-size:11.5px; background:var(--bg); }
+  .att-time-input{ width:74px; font-family:var(--mono); font-size:10.5px; padding:1px 2px; margin-top:3px; border:1px solid var(--border); border-radius:4px; color:var(--ok); background:transparent; text-align:center; }
+  .att-time-input:hover, .att-time-input:focus{ background:var(--surface); border-color:var(--accent); outline:none; }
+  .att-passed-box{ width:18px; height:18px; accent-color:var(--ok); cursor:pointer; }
+  .att-table tr.att-passed td.name-cell{ color:var(--ok); }
+  .att-check{ display:flex; align-items:center; gap:6px; font-size:13px; padding:2px 0; cursor:pointer; }
+  .att-link{ background:none; border:none; padding:0; color:var(--accent); font-size:12px; font-weight:600; cursor:pointer; text-decoration:underline; font-family:var(--display); }
+  .att-kv{ display:flex; gap:10px; padding:5px 0; border-bottom:1px dashed var(--border); font-size:13px; }
+  .att-kv .k{ width:130px; color:var(--text-soft); font-weight:600; flex-shrink:0; }
+  .att-kv .v{ white-space:pre-wrap; }
+  #attModalBox.wide{ max-width:560px; }
+  .att-modal-box textarea{ font-family:var(--display); font-size:13.5px; border:1px solid var(--border-strong); border-radius:var(--radius-sm); padding:8px 10px; width:100%; }
+
+  /* ---- tracker: values computed from the courses module ---- */
+  .ch-auto input{ background:#EAF4EC; border-radius:4px; }
+  .ch-reset{ border:none; background:none; cursor:pointer; color:var(--accent); font-size:11px; padding:0 2px; }
+  .ch-reset[hidden]{ display:none; }
+
 </style>
 </head>
 <body>
@@ -584,12 +619,13 @@
     </div>
     <div class="tabs" id="tabs">
       <button class="tab active" data-view="main">סניפים</button>
-      <button class="tab" data-view="settingsManagers">הגדרות מנהלים</button>
-      <button class="tab" data-view="settingsBranches">הגדרות סניפים</button>
+      <button class="tab" data-view="settingsManagers" hidden>הגדרות מנהלים</button>
+      <button class="tab" data-view="settingsBranches" hidden>הגדרות סניפים</button>
       <button class="tab" data-view="orgChart">עץ ארגוני</button>
       <button class="tab" data-view="courseHours">מעקב שעות הדרכה</button>
       <button class="tab" data-view="attendance">ניהול קורסים</button>
     </div>
+    <div class="gear-wrap" id="gearWrap"><button class="gear-btn" id="gearBtn" title="הגדרות" aria-label="הגדרות">⚙</button><div class="gear-menu" id="gearMenu"><button data-go="settingsManagers">הגדרות מנהלים</button><button data-go="settingsBranches">הגדרות סניפים</button></div></div>
     <div class="conn-status" id="connStatus"><span class="conn-dot off"></span>מתחבר...</div>
     <div id="attUserBox" style="display:flex;align-items:center;gap:8px"></div>
   </div>
@@ -1785,8 +1821,25 @@ function tenureText(startDateStr, asOfDate) {
 function isActiveStaff(s) {
   return s.status === "active";
 }
+/* true when the employee is under 18 (from the file's birth date, falling back to its "age" column) */
+function staffIsMinor(birthDate, age) {
+  const t = String(birthDate || "").trim();
+  let d = null;
+  let m = t.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/);
+  if (m) d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+  else if ((m = t.match(/^(\d{4})[\/.\-](\d{1,2})[\/.\-](\d{1,2})$/))) d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (d && !isNaN(d.getTime())) {
+    const now = new Date();
+    let a = now.getFullYear() - d.getFullYear();
+    const dm = now.getMonth() - d.getMonth();
+    if (dm < 0 || (dm === 0 && now.getDate() < d.getDate())) a--;
+    return a >= 0 && a < 18;
+  }
+  const n = Number(age);
+  return age !== null && age !== undefined && String(age).trim() !== "" && Number.isFinite(n) && n > 0 && n < 18;
+}
 function staffToNode(s, key, level, roleLabel) {
-  return { key, level, roleLabel, name: s.name || "—", empId: s.id, startDate: s.startDate || null, courses: s.courses || [], children: [] };
+  return { key, level, roleLabel, name: s.name || "—", empId: s.id, minor: staffIsMinor(s.birthDate, s.age), startDate: s.startDate || null, courses: s.courses || [], children: [] };
 }
 function attachSeniorShiftChain(parentNode, seniors, shifts, branchNumber) {
   if (seniors.length) {
@@ -1801,11 +1854,9 @@ function attachSeniorShiftChain(parentNode, seniors, shifts, branchNumber) {
 }
 function buildBranchNode(b, staffSource) {
   const branchStaff = staffSource.filter(s => String(s.branchNumber) === String(b.branchNumber) && isActiveStaff(s));
-  const mgrStaff = branchStaff.filter(s => s.role === "branchManager");
+  /* the branch manager comes ONLY from the branch settings (הגדרות סניפים), never from the monthly staff file */
   const key = `branch:${b.branchNumber}:branchManager`;
-  const branchManagerNode = mgrStaff.length
-    ? staffToNode(mgrStaff[0], key, 4, ROLE_BAND_LABEL.branchManager)
-    : { key, level: 4, roleLabel: ROLE_BAND_LABEL.branchManager, name: b.branchManagerName || "—", children: [] };
+  const branchManagerNode = { key, level: 4, roleLabel: ROLE_BAND_LABEL.branchManager, name: b.branchManagerName || "—", children: [] };
   branchManagerNode.branchLabel = `#${b.branchNumber ?? ""} ${b.branchName || ""}`.trim();
 
   const byName = (a, c) => (a.name || "").localeCompare(c.name || "", "he");
@@ -1930,7 +1981,7 @@ function computeMissingRoleBranches() {
   const missing = { branchManager: [], deputy: [], seniorShift: [], shift: [] };
   branches.filter(b => isRealBranch(b) && !isFranchise600Branch(b)).forEach(b => {
     const branchStaff = activeStaff.filter(s => String(s.branchNumber) === String(b.branchNumber));
-    const hasMgr = branchStaff.some(s => s.role === "branchManager") || !!(b.branchManagerName && b.branchManagerName.trim());
+    const hasMgr = !!(b.branchManagerName && b.branchManagerName.trim());
     if (!hasMgr) missing.branchManager.push(b);
     if (!branchStaff.some(s => s.role === "deputy")) missing.deputy.push(b);
     if (!branchStaff.some(s => s.role === "seniorShift")) missing.seniorShift.push(b);
@@ -1969,8 +2020,11 @@ function renderOrgStats() {
   const counts = { branchManager: 0, deputy: 0, seniorShift: 0, shift: 0 };
   let total = 0;
   staffAll.forEach(s => {
-    if (!isActiveStaff(s)) return;
+    if (!isActiveStaff(s) || s.role === "branchManager") return;   // branch managers are counted from the branch settings below
     if (Object.prototype.hasOwnProperty.call(counts, s.role)) { counts[s.role]++; total++; }
+  });
+  branches.forEach(b => {
+    if (isRealBranch(b) && b.branchManagerName && b.branchManagerName.trim()) { counts.branchManager++; total++; }
   });
   const missing = computeMissingRoleBranches();
 
@@ -2087,7 +2141,7 @@ function renderOrgNode(node, liveMap, asOfDate, isHistorical) {
   html += `<div class="org-node lvl-${node.level} ${replaced ? "replaced" : ""} ${hasKids && !underCut ? "boundary" : ""}" data-node-key="${escapeHtml(node.key)}">`;
   if (replaced) html += `<div class="replaced-badge">הוחלף</div>`;
   html += `<div class="role">${escapeHtml(node.roleLabel)}</div>`;
-  html += `<div class="name">${escapeHtml(node.name)}</div>`;
+  html += `<div class="name">${escapeHtml(node.name)}${node.minor ? ` <span class="minor-badge" title="מתחת לגיל 18">👶</span>` : ""}</div>`;
   if (node.branchLabel) html += `<div class="branchlbl">${escapeHtml(node.branchLabel)}</div>`;
   if (tenure) html += `<div class="tenure">${escapeHtml(tenure)}</div>`;
   if (canHaveCourses) {
@@ -2476,7 +2530,8 @@ async function importStaffFromRows(rows) {
     if (!hasCurrentMarker) { toast("לא נמצאה בקובץ אף שורת 'סטטוס נוכחי' — ודאו שזהו הקובץ הנכון", true); return; }
 
     const latestRows = latestRowPerEmployee(rows);
-    const relevantRows = latestRows.filter(r => staffRoleBand(r["תפקיד"]));
+    // branch managers are maintained by hand in the branch settings — the file never creates or updates them
+    const relevantRows = latestRows.filter(r => staffRoleBand(r["תפקיד"]) && staffRoleBand(r["תפקיד"]) !== "branchManager");
     let batch = writeBatch(db);
     let opCount = 0;
     const seenIds = new Set();
@@ -2491,6 +2546,8 @@ async function importStaffFromRows(rows) {
         branchNumber: (r["סניף"] || "").trim(),
         role: staffRoleBand(r["תפקיד"]),
         startDate: (r["תאריך תחילת עבודה"] || "").trim(),
+        birthDate: (r["תאריך לידה"] || "").trim(),
+        age: String(r["גיל"] || "").trim(),
         status: (r["סטטוס"] || "").trim() === "פעיל" ? "active" : "terminated",
         phone: (r["טלפון"] || "").trim(),
         email: (r["דוא״ל"] || r["דוא\"ל"] || "").trim(),
@@ -2727,16 +2784,29 @@ function chDefaultRows() { return CH_DEFAULT_COURSES.map(name => ({ id: chNewRow
    (which stored a plain hours:[12] array with no course-count) so existing data keeps working. */
 function chNormalizeRow(r) {
   if (Array.isArray(r.months) && r.months.length) {
-    const months = r.months.concat(chEmptyMonths()).slice(0, 12).map(m => ({ count: Number(m && m.count) || 0, hours: Number(m && m.hours) || 0 }));
+    const months = r.months.concat(chEmptyMonths()).slice(0, 12).map(m => ({ count: Number(m && m.count) || 0, hours: Number(m && m.hours) || 0, manual: !!(m && m.manual) }));
     return { id: r.id || chNewRowId(), name: r.name || "", months };
   }
   // legacy shape: hours-only array, no course-count column yet
   const legacyHours = (r.hours || []).concat(new Array(12).fill(0)).slice(0, 12);
   return { id: r.id || chNewRowId(), name: r.name || "", months: legacyHours.map(h => ({ count: 0, hours: Number(h) || 0 })) };
 }
+/* effective value of one cell: when the courses module has a matching course (same name, month of its first
+   session) the cell shows the computed course count / sum of attendance hours, unless it was corrected by hand
+   (m.manual) — a hand-corrected cell keeps its own numbers until the ↺ button returns it to the computed value. */
+function chCell(model, row, i) {
+  const m = row.months[i] || { count: 0, hours: 0 };
+  const auto = (typeof attAutoCell === "function") ? attAutoCell(model.year, row.name, i) : null;
+  if (auto && !m.manual) return { count: auto.count, hours: auto.hours, auto: true, manual: false, hasAuto: true };
+  return { count: Number(m.count) || 0, hours: Number(m.hours) || 0, auto: false, manual: !!m.manual, hasAuto: !!auto };
+}
+function chTakeManual(model, row, i) {
+  const m = row.months[i];
+  if (!m.manual) { const c = chCell(model, row, i); m.count = c.count; m.hours = c.hours; m.manual = true; }
+}
 function chMonthlyTotals(model) {
   const countTotals = new Array(12).fill(0), hoursTotals = new Array(12).fill(0);
-  model.rows.forEach(r => r.months.forEach((m, i) => { countTotals[i] += Number(m.count) || 0; hoursTotals[i] += Number(m.hours) || 0; }));
+  model.rows.forEach(r => r.months.forEach((_, i) => { const c = chCell(model, r, i); countTotals[i] += c.count; hoursTotals[i] += c.hours; }));
   return { countTotals, hoursTotals };
 }
 
@@ -2750,7 +2820,7 @@ async function saveChYear(year) {
   if (!model) return;
   const rows = model.rows.map(r => ({
     id: r.id, name: r.name || "",
-    months: r.months.slice(0, 12).map(m => ({ count: Number(m.count) || 0, hours: Number(m.hours) || 0 })),
+    months: r.months.slice(0, 12).map(m => ({ count: Number(m.count) || 0, hours: Number(m.hours) || 0, manual: !!m.manual })),
   }));
   try {
     await setDoc(doc(courseHoursCol, String(year)), { year, rows, updatedAt: new Date().toISOString() }, { merge: true });
@@ -2780,9 +2850,9 @@ function buildChTableHTML(model) {
             <input type="text" class="ch-name-input" data-row-id="${escapeHtml(r.id)}" value="${escapeHtml(r.name)}" placeholder="שם הקורס">
             <button class="ch-del-row" data-row-id="${escapeHtml(r.id)}" title="מחק שורה">✕</button>
           </td>
-          ${r.months.map((m, i) => `
-            <td class="ch-col-count"><input type="number" min="0" step="any" class="ch-count-input" data-row-id="${escapeHtml(r.id)}" data-month="${i}" value="${m.count ? m.count : ""}" title="כמות קורסים בחודש זה (ניתן להזין גם ערכים עשרוניים, למשל 0.5)"></td>
-            <td class="ch-col-hours ch-month-end"><input type="number" min="0" step="any" class="ch-hours-input" data-row-id="${escapeHtml(r.id)}" data-month="${i}" value="${m.hours ? m.hours : ""}" title="סה&quot;כ שעות עבודה בחודש זה (ניתן להזין גם ערכים עשרוניים, למשל 0.5)"></td>`).join("")}
+          ${r.months.map((m0, i) => { const m = chCell(model, r, i); return `
+            <td class="ch-col-count${m.auto ? " ch-auto" : ""}"><input type="number" min="0" step="any" class="ch-count-input" data-row-id="${escapeHtml(r.id)}" data-month="${i}" value="${m.count ? m.count : ""}" title="כמות קורסים בחודש זה (ניתן להזין גם ערכים עשרוניים, למשל 0.5)"></td>
+            <td class="ch-col-hours ch-month-end${m.auto ? " ch-auto" : ""}"><input type="number" min="0" step="any" class="ch-hours-input" data-row-id="${escapeHtml(r.id)}" data-month="${i}" value="${m.hours ? m.hours : ""}" title="סה&quot;כ שעות עבודה בחודש זה (ניתן להזין גם ערכים עשרוניים, למשל 0.5)">${m.hasAuto ? `<button class="ch-reset" data-row-id="${escapeHtml(r.id)}" data-month="${i}" title="חזרה לערך האוטומטי ממערכת ניהול הקורסים" ${m.manual ? "" : "hidden"}>↺</button>` : ""}</td>`; }).join("")}
         </tr>`).join("")}
     </tbody>
     <tfoot>
@@ -2838,7 +2908,9 @@ function attachChTableHandlers(year) {
       const row = model.rows.find(r => r.id === inp.dataset.rowId);
       if (!row) return;
       const month = Number(inp.dataset.month);
+      chTakeManual(model, row, month);
       row.months[month].count = inp.value === "" ? 0 : (Number(inp.value) || 0);
+      const rb = block.querySelector(`.ch-reset[data-row-id="${row.id}"][data-month="${month}"]`); if (rb) rb.hidden = false;
       updateChTotalsCells(block, model);
       scheduleChSave(year);
     });
@@ -2848,8 +2920,19 @@ function attachChTableHandlers(year) {
       const row = model.rows.find(r => r.id === inp.dataset.rowId);
       if (!row) return;
       const month = Number(inp.dataset.month);
+      chTakeManual(model, row, month);
       row.months[month].hours = inp.value === "" ? 0 : (Number(inp.value) || 0);
+      const rb = block.querySelector(`.ch-reset[data-row-id="${row.id}"][data-month="${month}"]`); if (rb) rb.hidden = false;
       updateChTotalsCells(block, model);
+      scheduleChSave(year);
+    });
+  });
+  block.querySelectorAll(".ch-reset").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const row = model.rows.find(r => r.id === btn.dataset.rowId);
+      if (!row) return;
+      row.months[Number(btn.dataset.month)].manual = false;
+      rerenderChYearTable(year);
       scheduleChSave(year);
     });
   });
@@ -2950,20 +3033,23 @@ document.getElementById("chAddYearBtn").addEventListener("click", async () => {
 /* =====================================================================
    ניהול קורסים (נוכחות) — אוחד ממערכת "ניהול נוכחות בקורסים"
    אוספים ב-Firestore:
-     attCourses/{courseId}                 — {name, sessions[], registrationOpen, createdAt}
-     attCourses/{courseId}/participants/*  — משתתפים + נוכחות + הערות
-     attCourses/{courseId}/regKeys/*       — מפתחות מניעת כפילויות (ת.ז / טלפון)
+     attCourses/{courseId}                          — {name, sessions[], registrationOpen, totalHours, createdAt}
+     attCourses/{courseId}/participants/*           — משתתפים + נוכחות + הערות + sessions[] (רישום חלקי) + passed
+     attCourses/{courseId}/deletedParticipants/*    — משתתפים שנמחקו, עם הערת מחיקה
+     attCourses/{courseId}/regKeys/*                — מפתחות מניעת כפילויות (ת.ז / טלפון)
    ===================================================================== */
 const attCoursesCol = collection(db, "attCourses");
 // public address of the site — used for self-registration links
 const ATT_PUBLIC_BASE_URL = "https://edo7171.github.io/snifim/";
 const att = {
-  view: "list",            // list | create | detail
+  view: "list",            // list | create | detail | deleted
   courses: [],
   coursesLoaded: false,
   currentCourseId: null,
   participants: [],
+  deleted: [],
   unsubParts: null,
+  unsubDeleted: null,
   newSessions: 4,
   dirty: false,
   banner: null             // {msg, type}
@@ -2992,12 +3078,20 @@ function attFormatDate(d) {
   return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : d;
 }
 const attDigits = (s) => String(s || "").replace(/\D/g, "");
+const attNormName = (s) => String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
 function attMillis(ts) {
   if (!ts) return Infinity;                        // serverTimestamp still pending → newest
   if (typeof ts.toMillis === "function") return ts.toMillis();
   if (typeof ts.seconds === "number") return ts.seconds * 1000;
   return 0;
 }
+function attFormatTs(ts) {
+  const ms = attMillis(ts);
+  if (!isFinite(ms)) return "";
+  const d = new Date(ms);
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}
+const attRound2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 function attSetBanner(msg, type) { att.banner = msg ? { msg, type: type || "error" } : null; if (currentView === "attendance") renderAttendance(); }
 
 /* ---- real branches from the main branches collection (skip placeholder stubs without a number) ---- */
@@ -3008,22 +3102,111 @@ function attBranches() {
 }
 const attBranchLabel = (b) => `${b.branchNumber} - ${b.branchName}`;
 
+/* ---- course names come from the course-hours tracker (the rows of its tables) ---- */
+function attCourseNameOptions() {
+  const years = [...new Set(courseHoursAll.map(d => d.year).concat(Object.keys(chModels).map(Number)))].sort((a, b) => b - a);
+  const seen = new Set(), names = [];
+  for (const y of years) {
+    const rows = chModels[y] ? chModels[y].rows : ((courseHoursAll.find(d => d.year === y) || {}).rows || []);
+    rows.forEach(r => {
+      const n = String(r.name || "").trim(), k = attNormName(n);
+      if (n && !seen.has(k)) { seen.add(k); names.push(n); }
+    });
+  }
+  return names;
+}
+
+/* ---- partial enrolment: participant.sessions = list of session indexes (absent = all sessions) ---- */
+const attEnrolled = (p, i) => !Array.isArray(p.sessions) || p.sessions.includes(i);
+function attEnrolledCount(p, course) {
+  const n = (course.sessions || []).length;
+  let c = 0; for (let i = 0; i < n; i++) if (attEnrolled(p, i)) c++;
+  return c;
+}
+
+/* ---- hours: both start and end must be marked with real times; times are editable by hand ---- */
+function attMinutes(t) {
+  const m = typeof t === "string" && t.match(/^(\d{1,2}):(\d{2})$/);
+  return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
+}
+function attSessionHours(a) {
+  if (!a || !a.start || !a.end) return 0;
+  const s = attMinutes(a.startTime), e = attMinutes(a.endTime);
+  if (s === null || e === null || e <= s) return 0;
+  return (e - s) / 60;
+}
+function attParticipantHours(p, course) {
+  let h = 0;
+  (course.sessions || []).forEach((s, i) => { if (attEnrolled(p, i)) h += attSessionHours(p.attendance && p.attendance[i]); });
+  return h;
+}
+const attTotalHours = (participants, course) => attRound2(participants.reduce((sum, p) => sum + attParticipantHours(p, course), 0));
+
+/* ---- tracker integration: month = month of the course's FIRST session; hours = sum of all participants' hours ---- */
+function attCourseYearMonth(course) {
+  const dates = (course.sessions || []).map(s => s.date).filter(Boolean).sort();
+  if (!dates.length) return null;
+  const y = parseInt(dates[0].slice(0, 4), 10), m = parseInt(dates[0].slice(5, 7), 10) - 1;
+  return (y && m >= 0 && m < 12) ? { year: y, month: m } : null;
+}
+let attAutoCache = { key: null, map: null };
+function attAutoMap() {
+  const key = att.courses.map(c => `${c.id}|${c.name}|${c.totalHours || 0}|${(c.sessions || []).map(s => s.date).join(",")}`).join(";");
+  if (attAutoCache.key === key) return attAutoCache.map;
+  const map = {};
+  att.courses.forEach(c => {
+    const ym = attCourseYearMonth(c);
+    if (!ym || !c.name) return;
+    const k = `${ym.year}|${attNormName(c.name)}|${ym.month}`;
+    const cur = map[k] || (map[k] = { count: 0, hours: 0 });
+    cur.count += 1; cur.hours = attRound2(cur.hours + (Number(c.totalHours) || 0));
+  });
+  attAutoCache = { key, map };
+  return map;
+}
+// called by the tracker table: {count, hours} computed from the courses module, or null when no course matches that cell
+function attAutoCell(year, rowName, month) {
+  return attAutoMap()[`${year}|${attNormName(rowName)}|${month}`] || null;
+}
+
 /* ================= Firestore: live sync ================= */
 onSnapshot(attCoursesCol, (snap) => {
   att.courses = snap.docs.map(d => ({ id: d.id, ...d.data() }))
     .sort((a, b) => attMillis(b.createdAt) - attMillis(a.createdAt));
   att.coursesLoaded = true;
   if (currentView === "attendance" && att.view !== "create") attRenderUnlessEditing();
+  if (currentView === "courseHours") {
+    const focusInTable = document.activeElement && document.activeElement.closest && document.activeElement.closest("#chTableWrap");
+    if (!focusInTable) renderCourseHours();
+  }
 }, (err) => { console.error(err); toast("שגיאה בטעינת קורסים: " + err.message, true); });
 
 function attSubscribeParticipants(courseId) {
   if (att.unsubParts) att.unsubParts();
-  att.participants = [];
+  if (att.unsubDeleted) att.unsubDeleted();
+  att.participants = []; att.deleted = [];
   att.unsubParts = onSnapshot(collection(db, "attCourses", courseId, "participants"), (snap) => {
     att.participants = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (a.lastName || "").localeCompare(b.lastName || "", "he") || (a.firstName || "").localeCompare(b.firstName || "", "he"));
-    if (currentView === "attendance" && att.view === "detail") attRenderUnlessEditing();
+    attSyncTotalHours(courseId);
+    if (currentView === "attendance" && (att.view === "detail" || att.view === "deleted")) attRenderUnlessEditing();
   }, (err) => { console.error(err); toast("שגיאה בטעינת משתתפים: " + err.message, true); });
+  att.unsubDeleted = onSnapshot(collection(db, "attCourses", courseId, "deletedParticipants"), (snap) => {
+    att.deleted = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => attMillis(b.deletedAt) - attMillis(a.deletedAt));
+    if (currentView === "attendance" && (att.view === "detail" || att.view === "deleted")) attRenderUnlessEditing();
+  }, (err) => { console.error(err); });
+}
+
+// keeps course.totalHours (the sum of all participants' attendance hours) up to date for the tracker
+function attSyncTotalHours(courseId) {
+  if (att.currentCourseId !== courseId) return;
+  const course = att.courses.find(c => c.id === courseId);
+  if (!course) return;
+  const total = attTotalHours(att.participants, course);
+  if (course.totalHours === undefined || Math.abs((Number(course.totalHours) || 0) - total) > 0.001) {
+    updateDoc(doc(db, "attCourses", courseId), { totalHours: total }).catch(e => console.warn("totalHours sync failed:", e.message));
+  }
 }
 
 // don't wipe a note the user is typing: postpone re-render until the field loses focus
@@ -3041,7 +3224,7 @@ document.getElementById("attRoot").addEventListener("focusout", () => {
 // snapshot of the real branches, stored on the course so the public registration form needs no access to the branches collection
 const attBranchOptions = () => attBranches().map(b => ({ id: b.id, number: b.branchNumber, name: b.branchName }));
 async function attCreateCourse(name, sessions) {
-  await addDoc(attCoursesCol, { name, sessions, registrationOpen: true, branchOptions: attBranchOptions(), createdAt: serverTimestamp() });
+  await addDoc(attCoursesCol, { name, sessions, registrationOpen: true, totalHours: 0, branchOptions: attBranchOptions(), createdAt: serverTimestamp() });
 }
 
 async function attDeleteSubcollection(courseId, sub) {
@@ -3055,6 +3238,7 @@ async function attDeleteSubcollection(courseId, sub) {
 }
 async function attDeleteCourse(courseId) {
   await attDeleteSubcollection(courseId, "participants");
+  await attDeleteSubcollection(courseId, "deletedParticipants");
   await attDeleteSubcollection(courseId, "regKeys");
   await deleteDoc(doc(db, "attCourses", courseId));
 }
@@ -3088,6 +3272,7 @@ async function attAddParticipant(courseId, data) {
   await addDoc(collection(db, "attCourses", courseId, "participants"), {
     firstName: data.firstName, lastName: data.lastName, teudatZehut: data.teudatZehut, phone: data.phone || "",
     branchId: data.branchId || "", branchNumber: data.branchNumber ?? null, branchName: data.branchName || "",
+    sessions: data.sessions, passed: false,
     notes: "", feedback: "", attendance, createdAt: serverTimestamp()
   });
   await attWriteRegKeys(courseId, data.teudatZehut, data.phone);
@@ -3095,7 +3280,8 @@ async function attAddParticipant(courseId, data) {
 async function attUpdateParticipantDetails(courseId, pid, data, previous) {
   await updateDoc(doc(db, "attCourses", courseId, "participants", pid), {
     firstName: data.firstName, lastName: data.lastName, teudatZehut: data.teudatZehut, phone: data.phone || "",
-    branchId: data.branchId || "", branchNumber: data.branchNumber ?? null, branchName: data.branchName || ""
+    branchId: data.branchId || "", branchNumber: data.branchNumber ?? null, branchName: data.branchName || "",
+    sessions: data.sessions
   });
   if (previous) {
     const oldK = attRegKeyIds(previous.teudatZehut, previous.phone).join("|");
@@ -3106,9 +3292,17 @@ async function attUpdateParticipantDetails(courseId, pid, data, previous) {
     }
   }
 }
-async function attDeleteParticipant(courseId, pid, p) {
-  await deleteDoc(doc(db, "attCourses", courseId, "participants", pid));
-  if (p) await attRemoveRegKeys(courseId, p.teudatZehut, p.phone);
+// delete = move to the separate "deleted" list together with the reason; the lock keys are released
+async function attDeleteParticipantWithNote(courseId, p, note) {
+  const { id, ...data } = p;
+  const batch = writeBatch(db);
+  batch.set(doc(db, "attCourses", courseId, "deletedParticipants", id), {
+    ...data, deleteNote: note || "", deletedAt: serverTimestamp(),
+    deletedBy: (attAuth.currentUser && attAuth.currentUser.email) || ""
+  });
+  batch.delete(doc(db, "attCourses", courseId, "participants", id));
+  attRegKeyIds(p.teudatZehut, p.phone).forEach(k => batch.delete(doc(db, "attCourses", courseId, "regKeys", k)));
+  await batch.commit();
 }
 const attUpdateField = (courseId, pid, field, value) =>
   updateDoc(doc(db, "attCourses", courseId, "participants", pid), { [field]: value });
@@ -3124,33 +3318,32 @@ async function attToggleAttendance(courseId, pid, idx, which, currentVal) {
     ["attendance." + idx + "." + which + "Time"]: nv ? attNowTime() : ""
   });
 }
+const attSetTime = (courseId, pid, idx, which, value) =>
+  updateDoc(doc(db, "attCourses", courseId, "participants", pid), { ["attendance." + idx + "." + which + "Time"]: value || "" });
 const attSetRegistrationOpen = (courseId, isOpen) => updateDoc(doc(db, "attCourses", courseId), { registrationOpen: isOpen });
 
+/* a person deleted earlier from this course who shows up again (same ID or phone) is flagged in the list */
+function attDeletedMatch(p) {
+  const tz = attDigits(p.teudatZehut), ph = attDigits(p.phone);
+  return att.deleted.find(d => (tz && attDigits(d.teudatZehut) === tz) || (ph && attDigits(d.phone) === ph)) || null;
+}
+
 /* ================= Excel export ================= */
-function attMinutes(t) {
-  const m = typeof t === "string" && t.match(/^(\d{1,2}):(\d{2})$/);
-  return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
-}
-// hours credited for a session: both start AND end marked with real times, otherwise 0
-function attSessionHours(a) {
-  if (!a || !a.start || !a.end) return 0;
-  const s = attMinutes(a.startTime), e = attMinutes(a.endTime);
-  if (s === null || e === null || e <= s) return 0;
-  return (e - s) / 60;
-}
-async function attExportExcel() {
+async function attExportExcel(onlyPassed) {
   const course = att.courses.find(c => c.id === att.currentCourseId);
   if (!course) return;
   if (typeof ExcelJS === "undefined") { toast("ספריית ייצוא האקסל לא נטענה — בדקו חיבור לאינטרנט", true); return; }
+  const people = onlyPassed ? att.participants.filter(p => p.passed) : att.participants;
+  if (onlyPassed && !people.length) { toast("אין עדיין עובדים שסומנו כעברו את הקורס", true); return; }
   const sessions = course.sessions || [];
   const wb = new ExcelJS.Workbook();
-  const sheet = wb.addWorksheet("נוכחות", { views: [{ rightToLeft: true }] });
+  const sheet = wb.addWorksheet(onlyPassed ? "מסיימי הקורס" : "נוכחות", { views: [{ rightToLeft: true }] });
   const header = ["שם פרטי", "שם משפחה", "ת.ז", "טלפון", "סניף"];
   sessions.forEach((s, i) => {
     const label = s.date ? attFormatDate(s.date) : ("מפגש " + (i + 1));
     header.push(label + " - התחלה", label + " - שעת התחלה", label + " - סיום", label + " - שעת סיום");
   });
-  header.push("הערות", "חוות דעת", "אחוז נוכחות", "סה\"כ שעות נוכחות");
+  header.push("הערות", "חוות דעת", "עבר/ה את הקורס", "אחוז נוכחות", "סה\"כ שעות נוכחות");
   const headerRow = sheet.addRow(header);
   headerRow.eachCell(cell => {
     cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -3158,52 +3351,57 @@ async function attExportExcel() {
     cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
   });
   const fixed = 5;
-  att.participants.forEach(p => {
+  people.forEach(p => {
     const row = [p.firstName || "", p.lastName || "", p.teudatZehut || "", p.phone || "", p.branchName || ""];
-    let complete = 0, hours = 0;
+    let complete = 0;
     sessions.forEach((s, i) => {
       const a = (p.attendance && p.attendance[i]) || {};
+      if (!attEnrolled(p, i)) { row.push("לא רשום/ה", "", "לא רשום/ה", ""); return; }
       if (a.start && a.end) complete++;
-      hours += attSessionHours(a);
       ["start", "end"].forEach(w => { row.push(a[w] ? "נכח" : "לא נכח"); row.push(a[w] ? (a[w + "Time"] || "") : ""); });
     });
-    row.push(p.notes || "", p.feedback || "");
-    row.push(sessions.length ? complete / sessions.length : 0);
-    row.push(Math.round(hours * 100) / 100);
+    const enrolledN = attEnrolledCount(p, course);
+    row.push(p.notes || "", p.feedback || "", p.passed ? "כן" : "לא");
+    row.push(enrolledN ? complete / enrolledN : 0);
+    row.push(attRound2(attParticipantHours(p, course)));
     const added = sheet.addRow(row);
     let col = fixed;
     sessions.forEach((s, i) => {
       const a = (p.attendance && p.attendance[i]) || {};
+      const enrolled = attEnrolled(p, i);
       ["start", "end"].forEach(w => {
         col++;
         const sc = added.getCell(col); sc.alignment = { horizontal: "center" };
-        if (!a[w]) sc.font = { color: { argb: "FFCC0000" } };
+        if (enrolled && !a[w]) sc.font = { color: { argb: "FFCC0000" } };
+        if (!enrolled) sc.font = { color: { argb: "FF999999" } };
         col++;
         const tc = added.getCell(col); tc.alignment = { horizontal: "center" }; tc.numFmt = "@";
       });
     });
     const pc = added.getCell(4); pc.numFmt = "@"; pc.alignment = { horizontal: "center" };
+    added.getCell(header.length - 2).alignment = { horizontal: "center" };
     const pct = added.getCell(header.length - 1); pct.numFmt = "0%"; pct.alignment = { horizontal: "center" };
     const hc = added.getCell(header.length); hc.numFmt = "0.00"; hc.alignment = { horizontal: "center" }; hc.font = { bold: true };
   });
   sheet.columns.forEach((c, i) => { c.width = i < fixed ? 16 : 15; });
+  sheet.getColumn(header.length - 4).width = 24;
   sheet.getColumn(header.length - 3).width = 24;
-  sheet.getColumn(header.length - 2).width = 24;
   sheet.getColumn(header.length).width = 18;
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "דוח_נוכחות_" + (course.name || "קורס").replace(/[\\/:*?"<>|]/g, "_") + ".xlsx";
+  a.download = (onlyPassed ? "מסיימי_קורס_" : "דוח_נוכחות_") + (course.name || "קורס").replace(/[\\/:*?"<>|]/g, "_") + ".xlsx";
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
 /* ================= Modal helpers (static overlay — not wiped by snapshot re-renders) ================= */
-function attOpenModal(build) {
+function attOpenModal(build, wide) {
   const box = document.getElementById("attModalBox");
   box.innerHTML = "";
+  box.classList.toggle("wide", !!wide);
   build(box);
   document.getElementById("attModalOverlay").classList.add("open");
 }
@@ -3213,9 +3411,13 @@ document.getElementById("attModalOverlay").addEventListener("mousedown", (e) => 
 });
 
 /* ================= Navigation ================= */
-function attGoList() {
-  att.view = "list"; att.currentCourseId = null; att.participants = []; att.banner = null;
+function attStopSubs() {
   if (att.unsubParts) { att.unsubParts(); att.unsubParts = null; }
+  if (att.unsubDeleted) { att.unsubDeleted(); att.unsubDeleted = null; }
+}
+function attGoList() {
+  att.view = "list"; att.currentCourseId = null; att.participants = []; att.deleted = []; att.banner = null;
+  attStopSubs();
   renderAttendance();
 }
 function attGoCreate() { att.view = "create"; att.newSessions = 4; att.banner = null; renderAttendance(); }
@@ -3224,6 +3426,8 @@ function attGoDetail(id) {
   attSubscribeParticipants(id);
   renderAttendance();
 }
+function attGoDeleted() { att.view = "deleted"; att.banner = null; renderAttendance(); }
+function attBackToDetail() { att.view = "detail"; att.banner = null; renderAttendance(); }
 
 /* ================= Views ================= */
 function renderAttendance() {
@@ -3232,6 +3436,7 @@ function renderAttendance() {
   host.innerHTML = "";
   if (att.view === "list") attRenderList(host);
   else if (att.view === "create") attRenderCreate(host);
+  else if (att.view === "deleted") attRenderDeleted(host);
   else attRenderDetail(host);
 }
 
@@ -3271,6 +3476,7 @@ function attRenderList(host) {
       attEl("div", { class: "meta" }, [n + " מפגשים" + (first ? " · מתחיל " + first : "")]),
       attEl("div", { class: "foot" }, [
         attEl("span", { class: "att-chip" + (open ? "" : " closed") }, [open ? "הרשמה פתוחה" : "הרשמה סגורה"]),
+        attIsAssigned(c) ? null : attEl("button", { class: "btn btn-sm att-assign-btn", title: "שם הקורס אינו ברשימה — לחצו לשיוך", onclick: (e) => { e.stopPropagation(); attOpenAssignModal(c); } }, ["לא משויך · שייך"]),
         attEl("button", { class: "btn btn-danger btn-sm", onclick: (e) => {
           e.stopPropagation();
           if (confirm("למחוק את הקורס '" + (c.name || "") + "'? פעולה זו תמחק גם את כל המשתתפים שלו.")) {
@@ -3286,9 +3492,14 @@ function attRenderList(host) {
 function attRenderCreate(host) {
   attHeader(host, "יצירת קורס חדש", null, [attEl("button", { class: "btn", onclick: attGoList }, ["← חזרה לרשימת קורסים"])]);
   const panel = attEl("div", { class: "card att-panel" });
+  const names = attCourseNameOptions();
+  const select = attEl("select", { id: "attNewName" });
+  select.appendChild(attEl("option", { value: "" }, ["בחר קורס מהרשימה..."]));
+  names.forEach(n => select.appendChild(attEl("option", { value: n }, [n])));
   panel.appendChild(attEl("div", { class: "att-field" }, [
-    attEl("label", {}, ["שם הקורס"]),
-    attEl("input", { type: "text", id: "attNewName", placeholder: "לדוגמה: קורס הדרכת מדריכים - מחזור ג׳" })
+    attEl("label", {}, ["שם הקורס (מתוך רשימת הקורסים במסך מעקב שעות הדרכה)"]),
+    select,
+    names.length ? null : attEl("div", { class: "att-banner error", style: "margin-top:8px" }, ["אין עדיין קורסים ברשימה. יש להוסיף שם קורס בטבלה במסך 'מעקב שעות הדרכה' ואז לחזור לכאן."])
   ]));
   panel.appendChild(attEl("div", { class: "att-field", style: "max-width:220px" }, [
     attEl("label", {}, ["מספר מפגשים"]),
@@ -3320,16 +3531,22 @@ function attRenderCreate(host) {
   panel.appendChild(list);
   buildRows();
 
+  // validation errors are shown inline so the form (name, sessions, dates) is not wiped by a re-render
+  const formErr = attEl("div", { id: "attFormErr" });
+  const showFormErr = (m) => { formErr.innerHTML = ""; formErr.appendChild(attEl("div", { class: "att-banner error" }, [m])); };
+  panel.appendChild(formErr);
   const saveBtn = attEl("button", { class: "btn btn-primary", id: "attSaveCourse", onclick: async () => {
-    const name = document.getElementById("attNewName").value.trim();
-    if (!name) { attSetBanner("יש להזין שם לקורס."); return; }
+    const name = select.value;
+    formErr.innerHTML = "";
+    if (!name) { showFormErr("יש לבחור שם קורס מהרשימה."); return; }
     const sessions = [];
     for (let i = 0; i < att.newSessions; i++) {
       sessions.push({ date: document.getElementById("att_sd_" + i).value, start: document.getElementById("att_ss_" + i).value, end: document.getElementById("att_se_" + i).value });
     }
+    if (!sessions[0].date) { showFormErr("יש להזין תאריך למפגש הראשון — הוא קובע את החודש של הקורס במעקב שעות ההדרכה."); return; }
     saveBtn.disabled = true; saveBtn.textContent = "שומר...";
     try { await attCreateCourse(name, sessions); toast("הקורס נוצר"); attGoList(); }
-    catch (e) { attSetBanner("שגיאה ביצירת הקורס: " + e.message); }
+    catch (e) { showFormErr("שגיאה ביצירת הקורס: " + e.message); saveBtn.disabled = false; saveBtn.textContent = "שמור קורס"; }
   } }, ["שמור קורס"]);
   panel.appendChild(attEl("div", { style: "display:flex;gap:8px" }, [saveBtn, attEl("button", { class: "btn", onclick: attGoList }, ["ביטול"])]));
   host.appendChild(panel);
@@ -3342,11 +3559,16 @@ function attRenderDetail(host) {
     return;
   }
   const sessions = course.sessions || [];
-  attHeader(host, course.name || "(ללא שם)", sessions.length + " מפגשים · " + att.participants.length + " משתתפים", [
+  const passedN = att.participants.filter(p => p.passed).length;
+  attHeader(host, course.name || "(ללא שם)",
+    `${sessions.length} מפגשים · ${att.participants.length} משתתפים · ${passedN} עברו את הקורס · ${attTotalHours(att.participants, course)} שעות נוכחות`, [
     attEl("button", { class: "btn", onclick: attGoList }, ["← חזרה"]),
     attEl("button", { class: "btn btn-primary", id: "attAddParticipantBtn", onclick: () => attOpenParticipantModal(null) }, ["+ הוסף משתתף"]),
     attEl("button", { class: "btn", id: "attRegLinkBtn", onclick: attOpenRegLinkModal }, ["קישור הרשמה"]),
-    attEl("button", { class: "btn", id: "attExportBtn", onclick: () => attExportExcel().catch(e => toast("שגיאה בייצוא: " + e.message, true)) }, ["ייצוא לאקסל"])
+    attEl("button", { class: "btn", id: "attAssignBtn", onclick: () => attOpenAssignModal(course) }, ["שייך לקורס מהרשימה"]),
+    attEl("button", { class: "btn", id: "attExportBtn", onclick: () => attExportExcel(false).catch(e => toast("שגיאה בייצוא: " + e.message, true)) }, ["ייצוא לאקסל"]),
+    attEl("button", { class: "btn", id: "attExportPassedBtn", onclick: () => attExportExcel(true).catch(e => toast("שגיאה בייצוא: " + e.message, true)) }, ["ייצוא מסיימים"]),
+    attEl("button", { class: "btn", id: "attDeletedBtn", onclick: attGoDeleted }, [`נמחקו (${att.deleted.length})`])
   ]);
 
   if (!att.participants.length) {
@@ -3357,35 +3579,53 @@ function attRenderDetail(host) {
     ...["#", "שם פרטי", "שם משפחה", "ת.ז", "טלפון", "סניף"].map(t => attEl("th", { rowspan: "2" }, [t]))
   ]);
   sessions.forEach((s, i) => head1.appendChild(attEl("th", { colspan: "2", class: "sess-group" }, [s.date ? attFormatDate(s.date) : "מפגש " + (i + 1)])));
-  ["הערות", "חוות דעת", ""].forEach(t => head1.appendChild(attEl("th", { rowspan: "2" }, [t])));
+  ["עבר/ה", "הערות", "חוות דעת", ""].forEach(t => head1.appendChild(attEl("th", { rowspan: "2" }, [t])));
   const head2 = attEl("tr", { class: "sub" });
   sessions.forEach(() => { head2.appendChild(attEl("th", {}, ["התחלה"])); head2.appendChild(attEl("th", { class: "sess-end" }, ["סיום"])); });
 
   const tbody = attEl("tbody");
   const cid = course.id;
   att.participants.forEach((p, idx) => {
-    const tr = attEl("tr", { "data-pid": p.id });
+    const tr = attEl("tr", { "data-pid": p.id, class: p.passed ? "att-passed" : "" });
     tr.appendChild(attEl("td", { class: "num" }, [String(idx + 1)]));
     tr.appendChild(attEl("td", { class: "name-cell" }, [p.firstName || ""]));
-    tr.appendChild(attEl("td", { class: "name-cell" }, [p.lastName || ""]));
+    const dm = attDeletedMatch(p);
+    tr.appendChild(attEl("td", { class: "name-cell" }, [
+      p.lastName || "",
+      dm ? attEl("div", { class: "att-warn", "data-deleted-warning": "1", title: "הערת מחיקה: " + (dm.deleteNote || "—") },
+        ["⚠ נמחק/ה בעבר מהקורס" + (dm.deletedAt ? " (" + attFormatTs(dm.deletedAt) + ")" : "")]) : null
+    ]));
     tr.appendChild(attEl("td", {}, [p.teudatZehut || ""]));
     tr.appendChild(attEl("td", { class: "att-phone", style: "white-space:nowrap" }, [
       p.phone ? attEl("a", { href: "tel:" + String(p.phone).replace(/[^\d+]/g, "") }, [p.phone]) : ""
     ]));
     tr.appendChild(attEl("td", {}, [p.branchName || ""]));
     sessions.forEach((s, i) => {
+      if (!attEnrolled(p, i)) {
+        tr.appendChild(attEl("td", { class: "att-na", colspan: "2", title: "לא רשום/ה למפגש זה" }, ["לא רשום/ה"]));
+        return;
+      }
       const a = (p.attendance && p.attendance[i]) || { start: false, end: false };
       ["start", "end"].forEach(w => {
         const on = !!a[w], at = a[w + "Time"] || "";
         const content = [attEl("div", { class: "att-box" + (on ? " on" : "") }, [on ? "✓" : ""])];
-        if (on && at) content.push(attEl("div", { class: "att-time" }, [at]));
+        if (on) {
+          const ti = attEl("input", { type: "time", class: "att-time-input", "data-time": i + ":" + w, value: at, title: "ניתן לתקן את השעה ידנית" });
+          ti.addEventListener("click", (e) => e.stopPropagation());
+          ti.addEventListener("change", () => attSetTime(cid, p.id, i, w, ti.value).catch(e => toast("שגיאה בעדכון שעה: " + e.message, true)));
+          content.push(ti);
+        }
         tr.appendChild(attEl("td", {
           class: "att-cell" + (w === "end" ? " sess-end" : ""), "data-att": i + ":" + w,
-          title: (w === "start" ? "נוכחות בתחילת המפגש" : "נוכחות בסיום המפגש") + (on && at ? " · סומן ב-" + at : ""),
+          title: (w === "start" ? "נוכחות בתחילת המפגש" : "נוכחות בסיום המפגש"),
           onclick: () => attToggleAttendance(cid, p.id, i, w, on).catch(e => toast("שגיאה בעדכון נוכחות: " + e.message, true))
         }, content));
       });
     });
+    const passBox = attEl("input", { type: "checkbox", class: "att-passed-box", title: "סימון עובד שעבר את הקורס" });
+    passBox.checked = !!p.passed;
+    passBox.addEventListener("change", () => attUpdateField(cid, p.id, "passed", passBox.checked).catch(e => toast("שגיאה בעדכון: " + e.message, true)));
+    tr.appendChild(attEl("td", {}, [passBox]));
     [["notes", "הערות..."], ["feedback", "חוות דעת..."]].forEach(([field, ph]) => {
       const ta = attEl("textarea", { rows: "1", placeholder: ph, "data-field": field });
       ta.value = p[field] || "";
@@ -3398,11 +3638,7 @@ function attRenderDetail(host) {
     });
     tr.appendChild(attEl("td", { style: "white-space:nowrap" }, [
       attEl("button", { class: "att-icon-btn edit", title: "ערוך משתתף", onclick: () => attOpenParticipantModal(p) }, ["✎"]),
-      attEl("button", { class: "att-icon-btn", title: "מחק משתתף", onclick: () => {
-        if (confirm("למחוק את " + (p.firstName || "") + " " + (p.lastName || "") + "?")) {
-          attDeleteParticipant(cid, p.id, p).catch(e => toast("שגיאה במחיקה: " + e.message, true));
-        }
-      } }, ["✕"])
+      attEl("button", { class: "att-icon-btn att-del-btn", title: "מחק משתתף", onclick: () => attOpenDeleteModal(p) }, ["✕"])
     ]));
     tbody.appendChild(tr);
   });
@@ -3411,9 +3647,111 @@ function attRenderDetail(host) {
   ]));
 }
 
+function attRenderDeleted(host) {
+  const course = att.courses.find(c => c.id === att.currentCourseId);
+  if (!course) { attGoList(); return; }
+  attHeader(host, "עובדים שנמחקו מהקורס", `${course.name || ""} · ${att.deleted.length} רשומות`, [
+    attEl("button", { class: "btn", id: "attBackToCourse", onclick: attBackToDetail }, ["← חזרה לקורס"])
+  ]);
+  if (!att.deleted.length) { host.appendChild(attEl("div", { class: "card empty-state" }, ["לא נמחקו עובדים מהקורס הזה."])); return; }
+  const tbody = attEl("tbody");
+  att.deleted.forEach(d => {
+    const sessions = course.sessions || [];
+    const attended = sessions.filter((s, i) => attEnrolled(d, i) && d.attendance && d.attendance[i] && d.attendance[i].start && d.attendance[i].end).length;
+    tbody.appendChild(attEl("tr", { "data-deleted-id": d.id }, [
+      attEl("td", { class: "name-cell" }, [(d.firstName || "") + " " + (d.lastName || "")]),
+      attEl("td", {}, [d.teudatZehut || ""]),
+      attEl("td", {}, [d.phone || ""]),
+      attEl("td", {}, [d.branchName || ""]),
+      attEl("td", {}, [attFormatTs(d.deletedAt)]),
+      attEl("td", { style: "text-align:right;max-width:300px;white-space:pre-wrap" }, [d.deleteNote || "—"]),
+      attEl("td", {}, [`${attended}/${attEnrolledCount(d, course)} · ${attRound2(attParticipantHours(d, course))} ש'`]),
+      attEl("td", {}, [attEl("button", { class: "btn btn-sm att-view-deleted", onclick: () => attOpenDeletedDetails(d) }, ["צפייה בנתונים"])])
+    ]));
+  });
+  host.appendChild(attEl("div", { class: "att-table-wrap" }, [
+    attEl("table", { class: "att-table", style: "min-width:760px" }, [
+      attEl("thead", {}, [attEl("tr", {}, ["שם", "ת.ז", "טלפון", "סניף", "נמחק בתאריך", "הערת מחיקה", "נוכחות", ""].map(t => attEl("th", {}, [t])))]),
+      tbody
+    ])
+  ]));
+}
+
+function attOpenDeletedDetails(d) {
+  const course = att.courses.find(c => c.id === att.currentCourseId);
+  if (!course) return;
+  attOpenModal((box) => {
+    box.appendChild(attEl("h3", { style: "margin:0 0 4px" }, [(d.firstName || "") + " " + (d.lastName || "")]));
+    box.appendChild(attEl("p", { class: "page-sub", style: "margin:0 0 12px" }, [`נמחק/ה ב-${attFormatTs(d.deletedAt) || "—"}${d.deletedBy ? " על ידי " + d.deletedBy : ""}`]));
+    const rows = [["ת.ז", d.teudatZehut], ["טלפון", d.phone], ["סניף", d.branchName], ["עבר/ה את הקורס", d.passed ? "כן" : "לא"], ["הערת מחיקה", d.deleteNote || "—"], ["הערות", d.notes || "—"], ["חוות דעת", d.feedback || "—"]];
+    rows.forEach(([k, v]) => box.appendChild(attEl("div", { class: "att-kv" }, [attEl("span", { class: "k" }, [k]), attEl("span", { class: "v" }, [String(v || "—")])])));
+    box.appendChild(attEl("div", { class: "att-field", style: "margin-top:10px" }, [attEl("label", {}, ["נוכחות לפי מפגש"])]));
+    (course.sessions || []).forEach((s, i) => {
+      const a = (d.attendance && d.attendance[i]) || {};
+      const txt = !attEnrolled(d, i) ? "לא רשום/ה"
+        : `התחלה: ${a.start ? (a.startTime || "✓") : "—"} · סיום: ${a.end ? (a.endTime || "✓") : "—"}`;
+      box.appendChild(attEl("div", { class: "att-kv" }, [attEl("span", { class: "k" }, [s.date ? attFormatDate(s.date) : "מפגש " + (i + 1)]), attEl("span", { class: "v" }, [txt])]));
+    });
+    box.appendChild(attEl("div", { class: "att-modal-actions" }, [attEl("button", { class: "btn", onclick: attCloseModal }, ["סגור"])]));
+  }, true);
+}
+
+/* ================= Assign an existing course to a name from the tracker list ================= */
+const attIsAssigned = (c) => attCourseNameOptions().some(n => attNormName(n) === attNormName(c.name));
+async function attAssignCourseName(courseId, newName) {
+  const c = att.courses.find(x => x.id === courseId);
+  const upd = { name: newName };
+  if (c && c.name && attNormName(c.name) !== attNormName(newName) && !c.originalName) upd.originalName = c.name;   // keep the old free-text name for reference
+  await updateDoc(doc(db, "attCourses", courseId), upd);
+}
+function attOpenAssignModal(course) {
+  const names = attCourseNameOptions();
+  attOpenModal((box) => {
+    box.appendChild(attEl("h3", { style: "margin:0 0 6px" }, ["שיוך קורס לקורס מהרשימה"]));
+    box.appendChild(attEl("p", { class: "page-sub", style: "margin:0 0 12px" }, [
+      `הקורס הנוכחי: "${course.name || "(ללא שם)"}". לאחר השיוך שם הקורס יוחלף בשם מהרשימה, וההשתתפות והשעות יסתכמו במעקב שעות הדרכה תחת אותה שורה.`]));
+    const select = attEl("select", { id: "attAssignSelect" });
+    select.appendChild(attEl("option", { value: "" }, ["בחר קורס מהרשימה..."]));
+    names.forEach(n => select.appendChild(attEl("option", { value: n }, [n])));
+    const cur = names.find(n => attNormName(n) === attNormName(course.name));
+    if (cur) select.value = cur;
+    box.appendChild(attEl("div", { class: "att-field" }, [attEl("label", {}, ["קורס מהרשימה"]), select]));
+    if (!names.length) box.appendChild(attEl("div", { class: "att-banner error" }, ["אין עדיין קורסים ברשימה. יש להוסיף שם קורס בטבלה במסך 'מעקב שעות הדרכה'."]));
+    const err = attEl("div");
+    box.appendChild(err);
+    const btn = attEl("button", { class: "btn btn-primary", id: "attAssignSave", onclick: async () => {
+      err.innerHTML = "";
+      if (!select.value) { err.appendChild(attEl("div", { class: "att-banner error" }, ["יש לבחור קורס מהרשימה."])); return; }
+      btn.disabled = true;
+      try { await attAssignCourseName(course.id, select.value); attCloseModal(); toast("הקורס שויך ל-" + select.value); }
+      catch (e) { err.appendChild(attEl("div", { class: "att-banner error" }, ["שגיאה בשיוך: " + e.message])); btn.disabled = false; }
+    } }, ["שייך"]);
+    box.appendChild(attEl("div", { class: "att-modal-actions" }, [attEl("button", { class: "btn", onclick: attCloseModal }, ["ביטול"]), btn]));
+  });
+}
+
 /* ================= Modals ================= */
+function attOpenDeleteModal(p) {
+  const courseId = att.currentCourseId;
+  attOpenModal((box) => {
+    box.appendChild(attEl("h3", { style: "margin:0 0 6px" }, ["מחיקת משתתף מהקורס"]));
+    box.appendChild(attEl("p", { class: "page-sub", style: "margin:0 0 12px" }, [
+      `${p.firstName || ""} ${p.lastName || ""} יועבר/תועבר למסך "נמחקו" עם כל הנתונים, וניתן יהיה לצפות בהם שם.`]));
+    const note = attEl("textarea", { id: "attDeleteNote", rows: "3", placeholder: "הערה — למה העובד נמחק מהקורס?", style: "width:100%" });
+    box.appendChild(attEl("div", { class: "att-field" }, [attEl("label", {}, ["הערה"]), note]));
+    const btn = attEl("button", { class: "btn btn-danger", id: "attDeleteConfirm", onclick: async () => {
+      btn.disabled = true;
+      try { await attDeleteParticipantWithNote(courseId, p, note.value.trim()); attCloseModal(); toast("המשתתף הועבר לרשימת הנמחקים"); }
+      catch (e) { toast("שגיאה במחיקה: " + e.message, true); btn.disabled = false; }
+    } }, ["מחק והעבר לנמחקים"]);
+    box.appendChild(attEl("div", { class: "att-modal-actions" }, [attEl("button", { class: "btn", onclick: attCloseModal }, ["ביטול"]), btn]));
+  });
+}
+
 function attOpenParticipantModal(editing) {
   const courseId = att.currentCourseId;
+  const course = att.courses.find(c => c.id === courseId);
+  const sessions = (course && course.sessions) || [];
   attOpenModal((box) => {
     box.appendChild(attEl("h3", { style: "margin:0 0 14px" }, [editing ? "עריכת משתתף" : "הוספת משתתף"]));
     const first = attEl("input", { type: "text", id: "p_first" });
@@ -3423,6 +3761,17 @@ function attOpenParticipantModal(editing) {
     if (editing) { first.value = editing.firstName || ""; last.value = editing.lastName || ""; idIn.value = editing.teudatZehut || ""; phone.value = editing.phone || ""; }
     [["שם פרטי", first], ["שם משפחה", last], ["ת.ז", idIn], ["מספר טלפון", phone]].forEach(([l, inp]) =>
       box.appendChild(attEl("div", { class: "att-field" }, [attEl("label", {}, [l]), inp])));
+
+    // warn when this ID / phone belongs to someone deleted earlier from this course
+    const warn = attEl("div", { id: "p_deleted_warn" });
+    const checkDeleted = () => {
+      warn.innerHTML = "";
+      if (editing) return;
+      const m = attDeletedMatch({ teudatZehut: idIn.value, phone: phone.value });
+      if (m) warn.appendChild(attEl("div", { class: "att-banner error" }, [`⚠ ${m.firstName || ""} ${m.lastName || ""} נמחק/ה בעבר מהקורס הזה. הערת מחיקה: ${m.deleteNote || "—"}`]));
+    };
+    idIn.addEventListener("input", checkDeleted); phone.addEventListener("input", checkDeleted);
+    box.appendChild(warn);
 
     const select = attEl("select", { id: "p_branch" });
     select.appendChild(attEl("option", { value: "" }, ["בחר סניף..."]));
@@ -3440,28 +3789,43 @@ function attOpenParticipantModal(editing) {
     }
     box.appendChild(attEl("div", { class: "att-field" }, [attEl("label", {}, ["סניף"]), select]));
 
+    // which sessions the person is registered to (default: all)
+    const sessBox = attEl("div", { class: "att-field", id: "p_sessions" }, [attEl("label", {}, ["רישום למפגשים"])]);
+    const checks = [];
+    sessions.forEach((s, i) => {
+      const cb = attEl("input", { type: "checkbox", "data-sess": String(i) });
+      cb.checked = editing ? attEnrolled(editing, i) : true;
+      checks.push(cb);
+      sessBox.appendChild(attEl("label", { class: "att-check" }, [cb, ` מפגש ${i + 1}${s.date ? " — " + attFormatDate(s.date) : ""}`]));
+    });
+    sessBox.appendChild(attEl("div", { style: "display:flex;gap:10px;margin-top:4px" }, [
+      attEl("button", { class: "att-link", type: "button", onclick: () => checks.forEach(c => { c.checked = true; }) }, ["בחר הכל"]),
+      attEl("button", { class: "att-link", type: "button", onclick: () => checks.forEach(c => { c.checked = false; }) }, ["נקה הכל"])
+    ]));
+    if (sessions.length) box.appendChild(sessBox);
+
     const err = attEl("div");
     box.appendChild(err);
+    const showErr = (m) => { err.innerHTML = ""; err.appendChild(attEl("div", { class: "att-banner error" }, [m])); };
     const saveBtn = attEl("button", { class: "btn btn-primary", id: "p_save", onclick: async () => {
       const firstName = first.value.trim(), lastName = last.value.trim();
-      if (!firstName || !lastName) { err.innerHTML = ""; err.appendChild(attEl("div", { class: "att-banner error" }, ["יש להזין שם פרטי ושם משפחה."])); return; }
+      if (!firstName || !lastName) { showErr("יש להזין שם פרטי ושם משפחה."); return; }
+      const chosen = checks.map((c, i) => c.checked ? i : -1).filter(i => i >= 0);
+      if (sessions.length && !chosen.length) { showErr("יש לבחור לפחות מפגש אחד."); return; }
       let branchId = "", branchNumber = null, branchName = "";
       if (select.value === "__keep__") { branchId = editing.branchId || ""; branchNumber = editing.branchNumber ?? null; branchName = editing.branchName || ""; }
       else if (select.value) {
         const b = list.find(x => x.id === select.value);
         if (b) { branchId = b.id; branchNumber = b.branchNumber; branchName = attBranchLabel(b); }
       }
-      const data = { firstName, lastName, teudatZehut: idIn.value.trim(), phone: phone.value.trim(), branchId, branchNumber, branchName };
+      const data = { firstName, lastName, teudatZehut: idIn.value.trim(), phone: phone.value.trim(), branchId, branchNumber, branchName, sessions: chosen };
       saveBtn.disabled = true;
       try {
         if (editing) await attUpdateParticipantDetails(courseId, editing.id, data, editing);
         else await attAddParticipant(courseId, data);
         attCloseModal();
         toast(editing ? "המשתתף עודכן" : "המשתתף נוסף");
-      } catch (e) {
-        err.innerHTML = ""; err.appendChild(attEl("div", { class: "att-banner error" }, ["שגיאה בשמירה: " + e.message]));
-        saveBtn.disabled = false;
-      }
+      } catch (e) { showErr("שגיאה בשמירה: " + e.message); saveBtn.disabled = false; }
     } }, [editing ? "שמור שינויים" : "הוסף"]);
     box.appendChild(attEl("div", { class: "att-modal-actions" }, [attEl("button", { class: "btn", onclick: attCloseModal }, ["ביטול"]), saveBtn]));
   });
@@ -3477,7 +3841,7 @@ function attOpenRegLinkModal() {
     const isOpen = course.registrationOpen !== false;
     const link = ATT_PUBLIC_BASE_URL + "?register=" + encodeURIComponent(courseId);
     box.appendChild(attEl("h3", { style: "margin:0 0 6px" }, ["קישור הרשמה עצמית"]));
-    box.appendChild(attEl("p", { class: "page-sub", style: "margin:0 0 14px" }, ["שלחו את הקישור למשתתפים. הם ימלאו שם, ת.ז, טלפון וסניף, והרישום יתווסף אוטומטית לקורס."]));
+    box.appendChild(attEl("p", { class: "page-sub", style: "margin:0 0 14px" }, ["שלחו את הקישור למשתתפים. הם ימלאו שם, ת.ז, טלפון וסניף, והרישום יתווסף אוטומטית לקורס (לכל המפגשים)."]));
     const input = attEl("input", { type: "text", readonly: "readonly", value: link, class: "att-link-input", id: "attRegLinkInput" });
     box.appendChild(attEl("div", { class: "att-field" }, [attEl("label", {}, ["הקישור"]), input]));
     const copyBtn = attEl("button", { class: "btn btn-primary", style: "width:100%;justify-content:center", onclick: async () => {
@@ -3535,17 +3899,22 @@ async function attRunKorsimImport(email, password, overwrite, log) {
       const name = cd.data().name || cd.id;
       if (existing.has(cd.id) && !overwrite) { stats.skipped++; log(`דילוג (כבר קיים): ${name}`); continue; }
       log(`מייבא: ${name}...`);
-      await setDoc(doc(db, "attCourses", cd.id), { ...cd.data(), importedFrom: "korsim", importedAt: serverTimestamp() });
-      stats.courses++;
+      const courseData = cd.data();
       const parts = await getDocs(collection(db2, "courses", cd.id, "participants"));
       const keys = await getDocs(collection(db2, "courses", cd.id, "regKeys"));
-      let batch = writeBatch(db), n = 0;
-      const flush = async (force) => { if (n >= 400 || (force && n)) { await batch.commit(); batch = writeBatch(db); n = 0; } };
-      for (const pd of parts.docs) {
+      const mapped = parts.docs.map(pd => {
         const data = pd.data();
         const br = attMapLegacyBranch(data);
         if (!br.mapped && (data.branchId || data.branchName)) stats.unmappedBranches++;
-        batch.set(doc(db, "attCourses", cd.id, "participants", pd.id), { ...data, branchId: br.branchId, branchNumber: br.branchNumber, branchName: br.branchName });
+        return { id: pd.id, data: { ...data, branchId: br.branchId, branchNumber: br.branchNumber, branchName: br.branchName } };
+      });
+      const totalHours = attTotalHours(mapped.map(m => m.data), courseData);
+      await setDoc(doc(db, "attCourses", cd.id), { ...courseData, totalHours, importedFrom: "korsim", importedAt: serverTimestamp() });
+      stats.courses++;
+      let batch = writeBatch(db), n = 0;
+      const flush = async (force) => { if (n >= 400 || (force && n)) { await batch.commit(); batch = writeBatch(db); n = 0; } };
+      for (const m of mapped) {
+        batch.set(doc(db, "attCourses", cd.id, "participants", m.id), m.data);
         n++; stats.participants++; await flush();
       }
       for (const kd of keys.docs) {
@@ -3595,6 +3964,23 @@ function attOpenImportModal() {
     box.appendChild(attEl("div", { class: "att-modal-actions" }, [attEl("button", { class: "btn", onclick: attCloseModal }, ["סגור"]), runBtn]));
   });
 }
+
+/* ================= Settings gear (managers / branches settings live under one button) ================= */
+(function initSettingsGear() {
+  const btn = document.getElementById("gearBtn"), menu = document.getElementById("gearMenu");
+  if (!btn || !menu) return;
+  btn.addEventListener("click", (e) => { e.stopPropagation(); menu.classList.toggle("open"); });
+  document.addEventListener("click", (e) => { if (!menu.contains(e.target)) menu.classList.remove("open"); });
+  menu.querySelectorAll("[data-go]").forEach(item => item.addEventListener("click", () => {
+    menu.classList.remove("open");
+    const hidden = document.querySelector(`.tab[data-view="${item.dataset.go}"]`);
+    if (hidden) hidden.click();
+  }));
+  document.getElementById("tabs").addEventListener("click", () => {
+    btn.classList.toggle("active", currentView === "settingsManagers" || currentView === "settingsBranches");
+    menu.querySelectorAll("[data-go]").forEach(i => i.classList.toggle("active", i.dataset.go === currentView));
+  });
+})();
 
 </script>
 </body>
