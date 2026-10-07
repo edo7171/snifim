@@ -604,6 +604,50 @@
   .ch-reset{ border:none; background:none; cursor:pointer; color:var(--accent); font-size:11px; padding:0 2px; }
   .ch-reset[hidden]{ display:none; }
 
+  /* ---- course feedback (משוב) ---- */
+  .att-reg-panel.fb{ max-width:560px; }
+  .fb-hr{ border:none; border-top:1px solid var(--border); margin:18px 0; }
+  .fb-q{ margin-bottom:18px; padding:12px; border:1px solid transparent; border-radius:var(--radius-sm); }
+  .fb-q.bad{ border-color:var(--replaced); background:var(--replaced-soft); }
+  .fb-qt{ font-weight:700; font-size:14px; margin-bottom:8px; line-height:1.5; }
+  .fb-req{ color:var(--replaced); }
+  .fb-scale{ display:flex; gap:8px; }
+  .fb-pill{ flex:1; cursor:pointer; }
+  .fb-pill input{ position:absolute; opacity:0; pointer-events:none; }
+  .fb-pill span{ display:flex; align-items:center; justify-content:center; height:42px; border:1.5px solid var(--border-strong); border-radius:var(--radius-sm); font-weight:700; background:var(--surface); }
+  .fb-pill input:checked + span{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .fb-pill input:focus-visible + span{ box-shadow:0 0 0 3px var(--accent-soft); }
+  .fb-ends{ display:flex; justify-content:space-between; font-size:11.5px; color:var(--text-soft); margin-top:5px; gap:8px; }
+  .fb-choices{ display:flex; flex-direction:column; gap:6px; }
+  .fb-choice{ display:flex; align-items:center; gap:8px; padding:9px 12px; border:1.5px solid var(--border-strong); border-radius:var(--radius-sm); cursor:pointer; background:var(--surface); font-size:13.5px; }
+  .fb-choice:has(input:checked){ border-color:var(--accent); background:var(--accent-soft); font-weight:600; }
+  .att-reg-panel textarea{ width:100%; font-family:var(--display); font-size:13.5px; border:1px solid var(--border-strong); border-radius:var(--radius-sm); padding:8px 10px; background:var(--surface); color:var(--text); }
+
+  #attModalBox.wide.att-xl{ max-width:780px; }
+  .att-fbq{ border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; margin-bottom:10px; background:var(--bg); }
+  .fbq-head{ display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap; }
+  .fbq-num{ font-weight:800; width:22px; color:var(--text-soft); }
+  .att-fbq input[type=text], .att-fbq select, .att-fbq textarea{ font-family:var(--display); font-size:13px; border:1px solid var(--border-strong); border-radius:var(--radius-sm); padding:6px 8px; background:var(--surface); color:var(--text); }
+  .att-fbq > input.fbq-text{ width:100%; }
+  .fbq-labels{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+  .att-fbq textarea.fbq-options{ margin-top:8px; }
+
+  .fb-summary{ display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px; margin-bottom:22px; }
+  .fb-card{ padding:16px 18px; }
+  .fb-card-title{ font-weight:700; font-size:13.5px; line-height:1.5; margin-bottom:8px; }
+  .fb-avg{ font-size:12.5px; color:var(--text-soft); margin-bottom:8px; }
+  .fb-avg-n{ font-size:26px; font-weight:800; color:var(--text); }
+  .fb-bars{ display:flex; flex-direction:column; gap:5px; }
+  .fb-bar-row{ display:grid; grid-template-columns:96px 1fr 26px; gap:8px; align-items:center; font-size:12.5px; }
+  .fb-bar-label{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fb-bar-track{ height:10px; background:var(--border); border-radius:5px; overflow:hidden; display:block; }
+  .fb-bar-fill{ display:block; height:100%; background:var(--accent); border-radius:5px; }
+  .fb-bar-n{ text-align:center; color:var(--text-soft); }
+  .fb-texts{ display:flex; flex-direction:column; gap:8px; max-height:300px; overflow:auto; }
+  .fb-text{ background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px; font-size:13px; white-space:pre-wrap; }
+  .fb-text-by{ font-size:11.5px; color:var(--text-soft); margin-top:3px; }
+  .fb-h2{ font-size:16px; margin:6px 0 10px; }
+
 </style>
 </head>
 <body>
@@ -908,6 +952,113 @@ const ATT_REGISTER_ID = new URLSearchParams(window.location.search).get("registe
 if (ATT_REGISTER_ID) {
   runAttRegistration(ATT_REGISTER_ID);
   throw new Error("register-mode: public registration page only");
+}
+
+/* ================= Public course feedback page (?feedback=<courseId>) ================= */
+const ATT_FEEDBACK_ID = new URLSearchParams(window.location.search).get("feedback");
+if (ATT_FEEDBACK_ID) {
+  runAttFeedback(ATT_FEEDBACK_ID);
+  throw new Error("feedback-mode: public feedback page only");
+}
+
+async function runAttFeedback(courseId) {
+  const esc = (s) => (s == null ? "" : String(s)).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  const digits = (s) => String(s || "").replace(/\D/g, "");
+  const fmt = (d) => { const p = String(d || "").split("-"); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : (d || ""); };
+  document.body.classList.add("att-register-mode");
+  const paint = (inner) => { document.body.innerHTML = `<div class="att-reg-wrap"><div class="card att-reg-panel fb">${inner}</div></div>`; };
+  paint(`<h1>טוען...</h1><div class="sub">רגע אחד, טוען את טופס המשוב.</div>`);
+
+  let course = null, branchList = [], questions = [];
+  try {
+    const cSnap = await getDoc(doc(db, "attCourses", courseId));
+    if (!cSnap.exists()) { paint(`<h1>לא ניתן למלא משוב</h1><div class="att-banner error">הקורס לא נמצא. ייתכן שהקישור שגוי או שהקורס נמחק.</div>`); return; }
+    course = { id: cSnap.id, ...cSnap.data() };
+    if (course.feedbackOpen !== true) { paint(`<h1>${esc(course.name)}</h1><div class="att-banner error">טופס המשוב לקורס זה סגור כרגע.</div>`); return; }
+    questions = Array.isArray(course.feedbackQuestions) ? course.feedbackQuestions : [];
+    branchList = (Array.isArray(course.branchOptions) ? course.branchOptions : []).slice().sort((a, b) => Number(a.number) - Number(b.number));
+    if (!questions.length || !branchList.length) { paint(`<h1>${esc(course.name)}</h1><div class="att-banner error">הטופס עדיין לא מוכן. יש לבקש מהמארגן/ת לשלוח את הקישור מחדש.</div>`); return; }
+  } catch (e) {
+    paint(`<h1>לא ניתן למלא משוב</h1><div class="att-banner error">שגיאה בטעינת הטופס: ${esc(e.message)}</div>`);
+    return;
+  }
+
+  document.title = (course.name || "קורס") + " - משוב";
+  const dates = (course.sessions || []).map(s => s.date).filter(Boolean).sort();
+  const dateLine = !dates.length ? "" : (dates.length === 1 || dates[0] === dates[dates.length - 1]) ? fmt(dates[0]) : `${fmt(dates[0])} – ${fmt(dates[dates.length - 1])}`;
+
+  const qHtml = questions.map((q, i) => {
+    const req = q.required ? ` <span class="fb-req">*</span>` : "";
+    let body = "";
+    if (q.type === "rating") {
+      body = `<div class="fb-scale">${[1, 2, 3, 4, 5].map(n => `<label class="fb-pill"><input type="radio" name="q_${i}" value="${n}"><span>${n}</span></label>`).join("")}</div>
+        <div class="fb-ends"><span>1 – ${esc(q.minLabel || "")}</span><span>5 – ${esc(q.maxLabel || "")}</span></div>`;
+    } else if (q.type === "choice") {
+      body = `<div class="fb-choices">${(q.options || []).map((o, k) => `<label class="fb-choice"><input type="radio" name="q_${i}" value="${k}"><span>${esc(o)}</span></label>`).join("")}</div>`;
+    } else {
+      body = `<textarea id="q_${i}" rows="3" maxlength="2000" placeholder="${q.required ? "" : "לא חובה"}"></textarea>`;
+    }
+    return `<div class="fb-q" id="fbq_${i}"><div class="fb-qt">${i + 1}. ${esc(q.text)}${req}</div>${body}</div>`;
+  }).join("");
+
+  paint(`
+    <h1>${esc(course.name)}</h1>
+    <div class="sub">${dateLine ? "תאריכי הקורס: " + esc(dateLine) + "<br>" : ""}טופס משוב על הקורס</div>
+    <div class="att-field"><label>שם פרטי</label><input type="text" id="f_first"></div>
+    <div class="att-field"><label>שם משפחה</label><input type="text" id="f_last"></div>
+    <div class="att-field"><label>ת.ז</label><input type="text" id="f_id" inputmode="numeric" maxlength="9"></div>
+    <div class="att-field"><label>סניף</label>
+      <select id="f_branch"><option value="">בחר סניף...</option>${branchList.map(b => `<option value="${esc(b.id)}">${esc(b.number)} - ${esc(b.name)}</option>`).join("")}</select></div>
+    <hr class="fb-hr">
+    ${qHtml}
+    <div id="f_err"></div>
+    <button class="btn btn-primary" id="f_submit">שלח משוב</button>`);
+
+  const errHost = document.getElementById("f_err");
+  const showErr = (m) => { errHost.innerHTML = `<div class="att-banner error">${esc(m)}</div>`; };
+  const submitBtn = document.getElementById("f_submit");
+  submitBtn.addEventListener("click", async () => {
+    errHost.innerHTML = "";
+    document.querySelectorAll(".fb-q.bad").forEach(e => e.classList.remove("bad"));
+    const firstName = document.getElementById("f_first").value.trim();
+    const lastName = document.getElementById("f_last").value.trim();
+    const tz = digits(document.getElementById("f_id").value);
+    const branchId = document.getElementById("f_branch").value;
+    if (!firstName || !lastName || !tz || !branchId) { showErr("יש למלא את כל פרטי העובד (שם, ת.ז וסניף)."); return; }
+    if (tz.length !== 9) { showErr("מספר ת.ז צריך להכיל 9 ספרות."); return; }
+    const answers = {}, qtext = {};
+    let missing = null;
+    questions.forEach((q, i) => {
+      let v = null;
+      if (q.type === "rating") { const c = document.querySelector(`input[name="q_${i}"]:checked`); if (c) v = Number(c.value); }
+      else if (q.type === "choice") { const c = document.querySelector(`input[name="q_${i}"]:checked`); if (c) v = (q.options || [])[Number(c.value)]; }
+      else { const t = document.getElementById("q_" + i).value.trim(); if (t) v = t; }
+      if (v === null || v === undefined || v === "") {
+        if (q.required && !missing) missing = i;
+        if (q.required) document.getElementById("fbq_" + i).classList.add("bad");
+        return;
+      }
+      answers[q.id] = v; qtext[q.id] = q.text;
+    });
+    if (missing !== null) { showErr("יש לענות על כל שאלות החובה (מסומנות באדום)."); document.getElementById("fbq_" + missing).scrollIntoView({ block: "center" }); return; }
+    const br = branchList.find(b => b.id === branchId);
+    submitBtn.disabled = true; submitBtn.textContent = "שולח...";
+    try {
+      const batch = writeBatch(db);
+      batch.set(doc(collection(db, "attCourses", courseId, "feedback")), {
+        firstName, lastName, teudatZehut: tz, branchId,
+        branchNumber: br ? br.number : null, branchName: br ? `${br.number} - ${br.name}` : "",
+        answers, qtext, createdAt: serverTimestamp()
+      });
+      batch.set(doc(db, "attCourses", courseId, "fbKeys", "fb_" + tz), { createdAt: serverTimestamp() });   // one feedback per ID
+      await batch.commit();
+      paint(`<h1>תודה!</h1><div class="att-banner info">המשוב שלך על הקורס "${esc(course.name)}" התקבל. תודה שהקדשת מזמנך.</div>`);
+    } catch (e) {
+      submitBtn.disabled = false; submitBtn.textContent = "שלח משוב";
+      if (e.code === "permission-denied") showErr("שליחת המשוב נכשלה: ייתכן שכבר מילאת משוב עם מספר ת.ז הזה, או שהטופס נסגר.");
+      else showErr("שליחת המשוב נכשלה: " + e.message);
+    }
+  });
 }
 
 async function runAttRegistration(courseId) {
@@ -3042,7 +3193,7 @@ const attCoursesCol = collection(db, "attCourses");
 // public address of the site — used for self-registration links
 const ATT_PUBLIC_BASE_URL = "https://edo7171.github.io/snifim/";
 const att = {
-  view: "list",            // list | create | detail | deleted
+  view: "list",            // list | create | detail | deleted | feedback
   courses: [],
   coursesLoaded: false,
   currentCourseId: null,
@@ -3050,6 +3201,8 @@ const att = {
   deleted: [],
   unsubParts: null,
   unsubDeleted: null,
+  unsubFeedback: null,
+  feedback: [],
   newSessions: 4,
   dirty: false,
   banner: null             // {msg, type}
@@ -3185,6 +3338,7 @@ function attSubscribeParticipants(courseId) {
   if (att.unsubParts) att.unsubParts();
   if (att.unsubDeleted) att.unsubDeleted();
   att.participants = []; att.deleted = [];
+  attSubscribeFeedback(courseId);
   att.unsubParts = onSnapshot(collection(db, "attCourses", courseId, "participants"), (snap) => {
     att.participants = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (a.lastName || "").localeCompare(b.lastName || "", "he") || (a.firstName || "").localeCompare(b.firstName || "", "he"));
@@ -3402,6 +3556,7 @@ function attOpenModal(build, wide) {
   const box = document.getElementById("attModalBox");
   box.innerHTML = "";
   box.classList.toggle("wide", !!wide);
+  box.classList.remove("att-xl");
   build(box);
   document.getElementById("attModalOverlay").classList.add("open");
 }
@@ -3414,9 +3569,10 @@ document.getElementById("attModalOverlay").addEventListener("mousedown", (e) => 
 function attStopSubs() {
   if (att.unsubParts) { att.unsubParts(); att.unsubParts = null; }
   if (att.unsubDeleted) { att.unsubDeleted(); att.unsubDeleted = null; }
+  if (att.unsubFeedback) { att.unsubFeedback(); att.unsubFeedback = null; }
 }
 function attGoList() {
-  att.view = "list"; att.currentCourseId = null; att.participants = []; att.deleted = []; att.banner = null;
+  att.view = "list"; att.currentCourseId = null; att.participants = []; att.deleted = []; att.feedback = []; att.banner = null;
   attStopSubs();
   renderAttendance();
 }
@@ -3427,6 +3583,7 @@ function attGoDetail(id) {
   renderAttendance();
 }
 function attGoDeleted() { att.view = "deleted"; att.banner = null; renderAttendance(); }
+function attGoFeedback() { att.view = "feedback"; att.banner = null; renderAttendance(); }
 function attBackToDetail() { att.view = "detail"; att.banner = null; renderAttendance(); }
 
 /* ================= Views ================= */
@@ -3437,6 +3594,7 @@ function renderAttendance() {
   if (att.view === "list") attRenderList(host);
   else if (att.view === "create") attRenderCreate(host);
   else if (att.view === "deleted") attRenderDeleted(host);
+  else if (att.view === "feedback") attRenderFeedback(host);
   else attRenderDetail(host);
 }
 
@@ -3568,6 +3726,7 @@ function attRenderDetail(host) {
     attEl("button", { class: "btn", id: "attAssignBtn", onclick: () => attOpenAssignModal(course) }, ["שייך לקורס מהרשימה"]),
     attEl("button", { class: "btn", id: "attExportBtn", onclick: () => attExportExcel(false).catch(e => toast("שגיאה בייצוא: " + e.message, true)) }, ["ייצוא לאקסל"]),
     attEl("button", { class: "btn", id: "attExportPassedBtn", onclick: () => attExportExcel(true).catch(e => toast("שגיאה בייצוא: " + e.message, true)) }, ["ייצוא מסיימים"]),
+    attEl("button", { class: "btn", id: "attFeedbackBtn", onclick: attGoFeedback }, [`משוב (${att.feedback.length})`]),
     attEl("button", { class: "btn", id: "attDeletedBtn", onclick: attGoDeleted }, [`נמחקו (${att.deleted.length})`])
   ]);
 
@@ -3981,6 +4140,337 @@ function attOpenImportModal() {
     menu.querySelectorAll("[data-go]").forEach(i => i.classList.toggle("active", i.dataset.go === currentView));
   });
 })();
+
+/* ================= משוב על קורס =================
+   - קישור ייחודי לכל קורס (?feedback=<id>) שהעובדים ממלאים בלי התחברות
+   - שאלות הניתנות לעריכה (הוספה / הסרה / שינוי), נשמרות על מסמך הקורס
+   - תשובות נשמרות ב-attCourses/{id}/feedback ונצפות כאן */
+const ATT_DEFAULT_FEEDBACK_QUESTIONS = [
+  { id: "q1", type: "rating", required: true, text: "עד כמה התכנים בקורס היו ברורים ומובנים?", minLabel: "בכלל לא", maxLabel: "במידה רבה מאוד" },
+  { id: "q2", type: "rating", required: true, text: "עד כמה התכנים בקורס רלוונטיים לעבודה שלך בסניף?", minLabel: "בכלל לא", maxLabel: "במידה רבה מאוד" },
+  { id: "q3", type: "choice", required: true, text: "איך הרגשת לגבי הקצב והאינטנסיביות של הקורס?",
+    options: ["איטי מדי", "קצת איטי", "מתאים", "קצת עמוס/מהיר", "עמוס/מהיר מדי"] },
+  { id: "q4", type: "rating", required: true, text: "עד כמה השילוב בין הסברים, תרגול ודוגמאות מהעבודה היה מתאים?", minLabel: "בכלל לא מתאים", maxLabel: "מתאים מאוד" },
+  { id: "q5", type: "rating", required: true, text: "עד כמה הקורס נתן לך ידע וכלים שתוכל/י ליישם בעבודה?", minLabel: "בכלל לא", maxLabel: "במידה רבה מאוד" },
+  { id: "q6", type: "rating", required: true, text: "מה דעתך על הקורס באופן כללי?", minLabel: "לא טוב", maxLabel: "מצוין" },
+  { id: "q7", type: "text", required: false, text: "אם היית יכול/ה לשנות או לשפר משהו בקורס, מה זה היה?" },
+  { id: "q8", type: "text", required: false, text: "האם יש נושא או שיעור שהיית מוסיף/ה לקורס, משנה או מוריד/ה? אם כן, נשמח שתפרט/י." }
+];
+const attClone = (x) => JSON.parse(JSON.stringify(x));
+const attNewQid = () => "q" + Math.random().toString(36).slice(2, 7) + Date.now().toString(36).slice(-3);
+const ATT_FB_TYPE_LABEL = { rating: "דירוג 1–5", choice: "בחירה מרשימה", text: "תשובה פתוחה" };
+
+function attCourseQuestions(course) {
+  return (course && Array.isArray(course.feedbackQuestions) && course.feedbackQuestions.length)
+    ? attClone(course.feedbackQuestions) : attClone(ATT_DEFAULT_FEEDBACK_QUESTIONS);
+}
+async function attLoadFbTemplate() {
+  try {
+    const s = await getDoc(doc(db, "attSettings", "feedbackTemplate"));
+    const q = s.exists() ? s.data().questions : null;
+    return Array.isArray(q) && q.length ? q : null;
+  } catch (e) { return null; }
+}
+
+/* ---- live responses ---- */
+function attSubscribeFeedback(courseId) {
+  if (att.unsubFeedback) att.unsubFeedback();
+  att.feedback = [];
+  att.unsubFeedback = onSnapshot(collection(db, "attCourses", courseId, "feedback"), (snap) => {
+    att.feedback = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => attMillis(b.createdAt) - attMillis(a.createdAt));
+    if (currentView === "attendance" && (att.view === "detail" || att.view === "feedback")) attRenderUnlessEditing();
+  }, (err) => console.warn("feedback listener:", err.message));
+}
+
+/* ---- the course's feedback setup: questions + open flag + branch list for the public form ---- */
+async function attEnsureFeedbackSetup(course) {
+  const upd = { branchOptions: attBranchOptions() };
+  if (!Array.isArray(course.feedbackQuestions) || !course.feedbackQuestions.length) upd.feedbackQuestions = (await attLoadFbTemplate()) || attClone(ATT_DEFAULT_FEEDBACK_QUESTIONS);
+  if (course.feedbackOpen === undefined) upd.feedbackOpen = true;
+  await updateDoc(doc(db, "attCourses", course.id), upd);
+  Object.assign(course, upd);
+}
+
+function attOpenFeedbackLinkModal() {
+  const courseId = att.currentCourseId;
+  const first = att.courses.find(c => c.id === courseId);
+  if (!first) return;
+  const build = () => attOpenModal((box) => {
+    const course = att.courses.find(c => c.id === courseId);
+    if (!course) { attCloseModal(); return; }
+    const isOpen = course.feedbackOpen === true;
+    const link = ATT_PUBLIC_BASE_URL + "?feedback=" + encodeURIComponent(courseId);
+    box.appendChild(attEl("h3", { style: "margin:0 0 6px" }, ["קישור למשוב על הקורס"]));
+    box.appendChild(attEl("p", { class: "page-sub", style: "margin:0 0 14px" }, ["שלחו את הקישור למשתתפים בסיום הקורס. בראש הטופס יוצגו שם הקורס ותאריכיו, והעובד ימלא שם, ת.ז וסניף ואת שאלות המשוב. אפשר למלא משוב פעם אחת לכל ת.ז."]));
+    const input = attEl("input", { type: "text", readonly: "readonly", value: link, class: "att-link-input", id: "attFbLinkInput" });
+    box.appendChild(attEl("div", { class: "att-field" }, [attEl("label", {}, ["הקישור"]), input]));
+    const copyBtn = attEl("button", { class: "btn btn-primary", id: "attFbCopy", style: "width:100%;justify-content:center", onclick: async () => {
+      try { await navigator.clipboard.writeText(link); copyBtn.textContent = "הקישור הועתק ✓"; setTimeout(() => { copyBtn.textContent = "העתק קישור"; }, 2000); }
+      catch (e) { input.select(); copyBtn.textContent = "סמן והעתק ידנית"; }
+    } }, ["העתק קישור"]);
+    box.appendChild(copyBtn);
+    box.appendChild(attEl("div", { style: "margin-top:14px;font-size:13px" }, [
+      "סטטוס המשוב: ", attEl("strong", { style: "color:" + (isOpen ? "var(--ok)" : "var(--replaced)") }, [isOpen ? "פתוח לתשובות" : "סגור"])]));
+    box.appendChild(attEl("button", { class: "btn " + (isOpen ? "btn-danger" : ""), id: "attFbToggle", style: "width:100%;justify-content:center;margin-top:8px", onclick: async () => {
+      try { await updateDoc(doc(db, "attCourses", courseId), { feedbackOpen: !isOpen }); course.feedbackOpen = !isOpen; build(); }
+      catch (e) { toast("שגיאה בעדכון סטטוס המשוב: " + e.message, true); }
+    } }, [isOpen ? "סגור את המשוב" : "פתח את המשוב"]));
+    box.appendChild(attEl("div", { class: "att-modal-actions" }, [attEl("button", { class: "btn", onclick: attCloseModal }, ["סגור"])]));
+  });
+  attEnsureFeedbackSetup(first).then(build).catch(e => toast("שגיאה בהכנת טופס המשוב: " + e.message, true));
+}
+
+/* ---- question editor ---- */
+function attOpenFeedbackEditor() {
+  const courseId = att.currentCourseId;
+  const course = att.courses.find(c => c.id === courseId);
+  if (!course) return;
+  let qs = attCourseQuestions(course);
+  attOpenModal((box) => {
+    box.classList.add("att-xl");
+    box.appendChild(attEl("h3", { style: "margin:0 0 6px" }, ["עריכת שאלות המשוב"]));
+    box.appendChild(attEl("p", { class: "page-sub", style: "margin:0 0 12px" }, [
+      att.feedback.length
+        ? `כבר התקבלו ${att.feedback.length} תשובות. תשובות קיימות נשמרות גם אם שאלה תשונה או תוסר (שאלה שהוסרה תוצג בתוצאות כ"שאלה שהוסרה").`
+        : "אפשר להוסיף, להסיר, לסדר מחדש ולשנות שאלות. השינויים חלים על הטופס של קורס זה."]));
+    const listEl = attEl("div", { id: "attFbEditList" });
+    const err = attEl("div");
+    const render = () => {
+      listEl.innerHTML = "";
+      qs.forEach((q, i) => {
+        const row = attEl("div", { class: "att-fbq", "data-qi": String(i) });
+        const typeSel = attEl("select", { class: "fbq-type" }, Object.keys(ATT_FB_TYPE_LABEL).map(t => attEl("option", { value: t }, [ATT_FB_TYPE_LABEL[t]])));
+        typeSel.value = q.type;
+        typeSel.addEventListener("change", () => {
+          q.type = typeSel.value;
+          if (q.type === "rating") { q.minLabel = q.minLabel || "בכלל לא"; q.maxLabel = q.maxLabel || "במידה רבה מאוד"; }
+          if (q.type === "choice" && !(q.options || []).length) q.options = ["", ""];
+          render();
+        });
+        const reqCb = attEl("input", { type: "checkbox", class: "fbq-req" }); reqCb.checked = !!q.required;
+        reqCb.addEventListener("change", () => { q.required = reqCb.checked; });
+        const move = (d) => () => { const j = i + d; if (j < 0 || j >= qs.length) return; [qs[i], qs[j]] = [qs[j], qs[i]]; render(); };
+        row.appendChild(attEl("div", { class: "fbq-head" }, [
+          attEl("span", { class: "fbq-num" }, [String(i + 1)]),
+          typeSel,
+          attEl("label", { class: "att-check", style: "margin:0" }, [reqCb, " חובה"]),
+          attEl("span", { style: "flex:1" }),
+          attEl("button", { class: "att-icon-btn fbq-up", type: "button", title: "הזז למעלה", onclick: move(-1) }, ["↑"]),
+          attEl("button", { class: "att-icon-btn fbq-down", type: "button", title: "הזז למטה", onclick: move(1) }, ["↓"]),
+          attEl("button", { class: "att-icon-btn fbq-del", type: "button", title: "הסר שאלה", style: "color:var(--replaced)", onclick: () => { qs.splice(i, 1); render(); } }, ["✕"])
+        ]));
+        const txt = attEl("input", { type: "text", class: "fbq-text", placeholder: "נוסח השאלה", value: q.text || "" });
+        txt.addEventListener("input", () => { q.text = txt.value; });
+        row.appendChild(txt);
+        if (q.type === "rating") {
+          const mn = attEl("input", { type: "text", class: "fbq-min", placeholder: "משמעות 1 (למשל: בכלל לא)", value: q.minLabel || "" });
+          const mx = attEl("input", { type: "text", class: "fbq-max", placeholder: "משמעות 5 (למשל: במידה רבה מאוד)", value: q.maxLabel || "" });
+          mn.addEventListener("input", () => { q.minLabel = mn.value; }); mx.addEventListener("input", () => { q.maxLabel = mx.value; });
+          row.appendChild(attEl("div", { class: "fbq-labels" }, [mn, mx]));
+        } else if (q.type === "choice") {
+          const ta = attEl("textarea", { class: "fbq-options", rows: "5", placeholder: "אפשרות בכל שורה" });
+          ta.value = (q.options || []).join("\n");
+          ta.addEventListener("input", () => { q.options = ta.value.split("\n"); });
+          row.appendChild(ta);
+        }
+        listEl.appendChild(row);
+      });
+    };
+    render();
+    box.appendChild(listEl);
+    box.appendChild(attEl("div", { style: "display:flex;gap:8px;flex-wrap:wrap;margin-top:10px" }, [
+      attEl("button", { class: "btn", id: "attFbAddQ", type: "button", onclick: () => { qs.push({ id: attNewQid(), type: "rating", required: true, text: "", minLabel: "בכלל לא", maxLabel: "במידה רבה מאוד" }); render(); listEl.lastChild && listEl.lastChild.querySelector(".fbq-text").focus(); } }, ["+ הוסף שאלה"]),
+      attEl("button", { class: "btn btn-outline", id: "attFbReset", type: "button", onclick: () => { qs = attClone(ATT_DEFAULT_FEEDBACK_QUESTIONS); render(); } }, ["שחזר שאלות ברירת מחדל"])
+    ]));
+    box.appendChild(err);
+    const clean = () => {
+      const out = [];
+      for (let i = 0; i < qs.length; i++) {
+        const q = qs[i], text = String(q.text || "").trim();
+        if (!text) throw new Error(`שאלה ${i + 1}: יש להזין נוסח לשאלה (או להסיר אותה).`);
+        const o = { id: q.id || attNewQid(), type: q.type, required: !!q.required, text };
+        if (q.type === "rating") { o.minLabel = String(q.minLabel || "").trim(); o.maxLabel = String(q.maxLabel || "").trim(); }
+        if (q.type === "choice") {
+          o.options = (q.options || []).map(x => String(x).trim()).filter(Boolean);
+          if (o.options.length < 2) throw new Error(`שאלה ${i + 1}: שאלת בחירה צריכה לפחות שתי אפשרויות.`);
+        }
+        out.push(o);
+      }
+      if (!out.length) throw new Error("יש להשאיר לפחות שאלה אחת.");
+      if (out.length > 30) throw new Error("ניתן להגדיר עד 30 שאלות.");
+      return out;
+    };
+    const showErr = (m) => { err.innerHTML = ""; err.appendChild(attEl("div", { class: "att-banner error", style: "margin-top:10px" }, [m])); };
+    const save = async (asDefault) => {
+      err.innerHTML = "";
+      let cleaned;
+      try { cleaned = clean(); } catch (e) { showErr(e.message); return; }
+      try {
+        await updateDoc(doc(db, "attCourses", courseId), { feedbackQuestions: cleaned });
+        if (asDefault) await setDoc(doc(db, "attSettings", "feedbackTemplate"), { questions: cleaned, updatedAt: serverTimestamp() });
+        attCloseModal();
+        toast(asDefault ? "השאלות נשמרו, וישמשו כברירת מחדל לקורסים הבאים" : "שאלות המשוב נשמרו");
+      } catch (e) { showErr("שגיאה בשמירה: " + e.message); }
+    };
+    box.appendChild(attEl("div", { class: "att-modal-actions", style: "flex-wrap:wrap" }, [
+      attEl("button", { class: "btn", type: "button", onclick: attCloseModal }, ["ביטול"]),
+      attEl("button", { class: "btn btn-outline", id: "attFbSaveDefault", type: "button", onclick: () => save(true) }, ["שמור גם כברירת מחדל לקורסים הבאים"]),
+      attEl("button", { class: "btn btn-primary", id: "attFbSave", type: "button", onclick: () => save(false) }, ["שמור"])
+    ]));
+  }, true);
+}
+
+/* ---- results ---- */
+// current questions + questions that were removed after answers had been collected
+function attFbDisplayQuestions(course, responses) {
+  const qs = attCourseQuestions(course).map(q => ({ ...q, removed: false }));
+  const known = new Set(qs.map(q => q.id));
+  responses.forEach(r => Object.keys(r.answers || {}).forEach(id => {
+    if (!known.has(id)) { known.add(id); qs.push({ id, type: "text", required: false, text: (r.qtext && r.qtext[id]) || id, removed: true }); }
+  }));
+  return qs;
+}
+const attFbValue = (r, q) => (r.answers || {})[q.id];
+function attFbPersonInCourse(r) {
+  const tz = attDigits(r.teudatZehut);
+  return att.participants.some(p => attDigits(p.teudatZehut) === tz) || att.deleted.some(p => attDigits(p.teudatZehut) === tz);
+}
+
+function attFbBars(rows, total) {
+  const wrap = attEl("div", { class: "fb-bars" });
+  rows.forEach(([label, n]) => {
+    wrap.appendChild(attEl("div", { class: "fb-bar-row" }, [
+      attEl("span", { class: "fb-bar-label" }, [label]),
+      attEl("span", { class: "fb-bar-track" }, [attEl("span", { class: "fb-bar-fill", style: `width:${total ? Math.round(n / total * 100) : 0}%` })]),
+      attEl("span", { class: "fb-bar-n" }, [String(n)])
+    ]));
+  });
+  return wrap;
+}
+
+function attRenderFeedback(host) {
+  const course = att.courses.find(c => c.id === att.currentCourseId);
+  if (!course) { attHeader(host, "הקורס לא נמצא", null, [attEl("button", { class: "btn", onclick: attGoList }, ["← חזרה לרשימת קורסים"])]); return; }
+  const rs = att.feedback;
+  const qs = attFbDisplayQuestions(course, rs);
+  attHeader(host, "משוב — " + (course.name || ""),
+    `${rs.length} תשובות · הטופס ${course.feedbackOpen === true ? "פתוח" : "סגור"}`, [
+    attEl("button", { class: "btn", onclick: attBackToDetail }, ["← חזרה לקורס"]),
+    attEl("button", { class: "btn btn-primary", id: "attFbLinkBtn", onclick: attOpenFeedbackLinkModal }, ["קישור למשוב"]),
+    attEl("button", { class: "btn", id: "attFbEditBtn", onclick: attOpenFeedbackEditor }, ["עריכת שאלות"]),
+    attEl("button", { class: "btn", id: "attFbExportBtn", onclick: () => attExportFeedback().catch(e => toast("שגיאה בייצוא: " + e.message, true)) }, ["ייצוא לאקסל"])
+  ]);
+  if (!rs.length) {
+    host.appendChild(attEl("div", { class: "card empty-state" }, ["עדיין לא התקבלו תשובות. לחצו על \"קישור למשוב\", העתיקו ושלחו למשתתפים."]));
+    return;
+  }
+
+  // summary per question
+  const grid = attEl("div", { class: "fb-summary" });
+  qs.forEach((q, qi) => {
+    const vals = rs.map(r => attFbValue(r, q)).filter(v => v !== undefined && v !== null && v !== "");
+    const card = attEl("div", { class: "card fb-card", "data-fb-q": q.id }, [
+      attEl("div", { class: "fb-card-title" }, [`${qi + 1}. ${q.text}`, q.removed ? attEl("span", { class: "att-chip closed", style: "margin-inline-start:8px" }, ["שאלה שהוסרה"]) : null])]);
+    if (q.type === "rating") {
+      const nums = vals.map(Number).filter(n => n >= 1 && n <= 5);
+      const avg = nums.length ? attRound2(nums.reduce((a, b) => a + b, 0) / nums.length) : 0;
+      card.appendChild(attEl("div", { class: "fb-avg" }, [attEl("span", { class: "fb-avg-n", "data-fb-avg": "1" }, [nums.length ? String(avg) : "—"]), ` / 5 · ${nums.length} תשובות`]));
+      card.appendChild(attFbBars([5, 4, 3, 2, 1].map(n => [String(n), nums.filter(x => x === n).length]), nums.length));
+    } else if (q.type === "choice") {
+      const opts = (q.options || []).slice();
+      vals.forEach(v => { if (!opts.includes(v)) opts.push(v); });
+      card.appendChild(attEl("div", { class: "fb-avg" }, [`${vals.length} תשובות`]));
+      card.appendChild(attFbBars(opts.map(o => [o, vals.filter(v => v === o).length]), vals.length));
+    } else {
+      card.appendChild(attEl("div", { class: "fb-avg" }, [`${vals.length} תשובות`]));
+      const list = attEl("div", { class: "fb-texts" });
+      rs.forEach(r => { const v = attFbValue(r, q); if (v) list.appendChild(attEl("div", { class: "fb-text" }, [attEl("div", {}, [String(v)]), attEl("div", { class: "fb-text-by" }, [`— ${r.firstName || ""} ${r.lastName || ""}${r.branchName ? " · " + r.branchName : ""}`])])); });
+      card.appendChild(list);
+    }
+    grid.appendChild(card);
+  });
+  host.appendChild(grid);
+
+  // individual responses
+  host.appendChild(attEl("h2", { class: "fb-h2" }, ["תשובות לפי עובד"]));
+  const head = attEl("tr", {}, [
+    ...["תאריך", "שם", "ת.ז", "סניף"].map(t => attEl("th", {}, [t])),
+    ...qs.map((q, i) => attEl("th", { title: q.text, style: "max-width:170px;white-space:normal" }, [`${i + 1}. ${q.text.length > 34 ? q.text.slice(0, 34) + "…" : q.text}`])),
+    attEl("th", {}, [""])
+  ]);
+  const tbody = attEl("tbody");
+  rs.forEach(r => {
+    const inCourse = attFbPersonInCourse(r);
+    tbody.appendChild(attEl("tr", { "data-fb-id": r.id }, [
+      attEl("td", { style: "white-space:nowrap" }, [attFormatTs(r.createdAt) || ""]),
+      attEl("td", { class: "name-cell" }, [`${r.firstName || ""} ${r.lastName || ""}`, inCourse ? null : attEl("div", { class: "att-warn", "data-fb-notin": "1", title: "ת.ז זו לא מופיעה ברשימת משתתפי הקורס" }, ["⚠ לא ברשימת הקורס"])]),
+      attEl("td", {}, [r.teudatZehut || ""]),
+      attEl("td", { style: "white-space:nowrap" }, [r.branchName || ""]),
+      ...qs.map(q => { const v = attFbValue(r, q); return attEl("td", { style: q.type === "text" ? "min-width:190px;text-align:right;white-space:pre-wrap" : "" }, [v === undefined || v === null ? "" : String(v)]); }),
+      attEl("td", {}, [attEl("button", { class: "att-icon-btn fb-del", title: "מחק תשובה", style: "color:var(--replaced)", onclick: () => attOpenFeedbackDeleteModal(r) }, ["✕"])])
+    ]));
+  });
+  host.appendChild(attEl("div", { class: "att-table-wrap" }, [attEl("table", { class: "att-table", style: "min-width:" + (560 + qs.length * 110) + "px" }, [attEl("thead", {}, [head]), tbody])]));
+}
+
+function attOpenFeedbackDeleteModal(r) {
+  const courseId = att.currentCourseId;
+  attOpenModal((box) => {
+    box.appendChild(attEl("h3", { style: "margin:0 0 6px" }, ["מחיקת תשובת משוב"]));
+    box.appendChild(attEl("p", { class: "page-sub", style: "margin:0 0 12px" }, [`התשובה של ${r.firstName || ""} ${r.lastName || ""} תימחק, והעובד יוכל למלא את המשוב שוב.`]));
+    const btn = attEl("button", { class: "btn btn-danger", id: "attFbDelConfirm", onclick: async () => {
+      btn.disabled = true;
+      try {
+        const batch = writeBatch(db);
+        batch.delete(doc(db, "attCourses", courseId, "feedback", r.id));
+        const tz = attDigits(r.teudatZehut);
+        if (tz) batch.delete(doc(db, "attCourses", courseId, "fbKeys", "fb_" + tz));
+        await batch.commit();
+        attCloseModal(); toast("התשובה נמחקה");
+      } catch (e) { toast("שגיאה במחיקה: " + e.message, true); btn.disabled = false; }
+    } }, ["מחק"]);
+    box.appendChild(attEl("div", { class: "att-modal-actions" }, [attEl("button", { class: "btn", onclick: attCloseModal }, ["ביטול"]), btn]));
+  });
+}
+
+async function attExportFeedback() {
+  const course = att.courses.find(c => c.id === att.currentCourseId);
+  if (!course) return;
+  if (typeof ExcelJS === "undefined") { toast("ספריית ייצוא האקסל לא נטענה — בדקו חיבור לאינטרנט", true); return; }
+  const rs = att.feedback;
+  if (!rs.length) { toast("אין עדיין תשובות משוב לייצוא", true); return; }
+  const qs = attFbDisplayQuestions(course, rs);
+  const wb = new ExcelJS.Workbook();
+  const sheet = wb.addWorksheet("משוב", { views: [{ rightToLeft: true }] });
+  const header = ["תאריך", "שם פרטי", "שם משפחה", "ת.ז", "סניף", ...qs.map((q, i) => `${i + 1}. ${q.text}`)];
+  const hr = sheet.addRow(header);
+  hr.eachCell(cell => {
+    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF14213D" } };
+    cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  });
+  rs.forEach(r => {
+    const row = sheet.addRow([attFormatTs(r.createdAt) || "", r.firstName || "", r.lastName || "", r.teudatZehut || "", r.branchName || "",
+      ...qs.map(q => { const v = attFbValue(r, q); return v === undefined || v === null ? "" : (q.type === "rating" ? Number(v) : v); })]);
+    row.getCell(4).numFmt = "@";
+    qs.forEach((q, i) => { const c = row.getCell(6 + i); c.alignment = q.type === "text" ? { wrapText: true, vertical: "top" } : { horizontal: "center" }; });
+  });
+  // average row for the rating questions
+  const avgRow = sheet.addRow(["", "", "", "", "ממוצע", ...qs.map(q => {
+    if (q.type !== "rating") return "";
+    const nums = rs.map(r => Number(attFbValue(r, q))).filter(n => n >= 1 && n <= 5);
+    return nums.length ? attRound2(nums.reduce((a, b) => a + b, 0) / nums.length) : "";
+  })]);
+  avgRow.font = { bold: true };
+  sheet.columns.forEach((c, i) => { c.width = i < 5 ? 16 : (qs[i - 5] && qs[i - 5].type === "text" ? 40 : 22); });
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "משוב_" + (course.name || "קורס").replace(/[\\/:*?"<>|]/g, "_") + ".xlsx";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 </script>
 </body>
