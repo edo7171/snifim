@@ -2955,6 +2955,8 @@ document.getElementById("chAddYearBtn").addEventListener("click", async () => {
      attCourses/{courseId}/regKeys/*       — מפתחות מניעת כפילויות (ת.ז / טלפון)
    ===================================================================== */
 const attCoursesCol = collection(db, "attCourses");
+// public address of the site — used for self-registration links
+const ATT_PUBLIC_BASE_URL = "https://edo7171.github.io/snifim/";
 const att = {
   view: "list",            // list | create | detail
   courses: [],
@@ -3473,7 +3475,7 @@ function attOpenRegLinkModal() {
     const course = att.courses.find(c => c.id === courseId);
     if (!course) { attCloseModal(); return; }
     const isOpen = course.registrationOpen !== false;
-    const link = window.location.origin + window.location.pathname + "?register=" + encodeURIComponent(courseId);
+    const link = ATT_PUBLIC_BASE_URL + "?register=" + encodeURIComponent(courseId);
     box.appendChild(attEl("h3", { style: "margin:0 0 6px" }, ["קישור הרשמה עצמית"]));
     box.appendChild(attEl("p", { class: "page-sub", style: "margin:0 0 14px" }, ["שלחו את הקישור למשתתפים. הם ימלאו שם, ת.ז, טלפון וסניף, והרישום יתווסף אוטומטית לקורס."]));
     const input = attEl("input", { type: "text", readonly: "readonly", value: link, class: "att-link-input", id: "attRegLinkInput" });
