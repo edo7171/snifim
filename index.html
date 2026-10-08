@@ -648,6 +648,10 @@
   .fb-text-by{ font-size:11.5px; color:var(--text-soft); margin-top:3px; }
   .fb-h2{ font-size:16px; margin:6px 0 10px; }
 
+  /* ---- course card status chips ---- */
+  .att-chip.active{ background:#FFF1B8; color:#7A5A00; }
+  .att-chip.ended{ background:#D6EEFA; color:#14658F; }
+
 </style>
 </head>
 <body>
@@ -3225,6 +3229,17 @@ function attEl(tag, attrs, children) {
   return node;
 }
 
+/* course status for the card chip: not started yet → registration open/closed, started → פעיל (yellow), finished → הסתיים (light blue) */
+function attLocalIsoDate(d) { d = d || new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function attCourseStatus(c, today) {
+  today = today || attLocalIsoDate();
+  const dates = (c.sessions || []).map(s => s.date).filter(Boolean).sort();
+  if (!dates.length) return "upcoming";
+  if (today > dates[dates.length - 1]) return "ended";
+  if (today >= dates[0]) return "active";
+  return "upcoming";
+}
+
 function attFormatDate(d) {
   if (!d) return "";
   const p = String(d).split("-");
@@ -3633,7 +3648,12 @@ function attRenderList(host) {
       attEl("h3", {}, [c.name || "(ללא שם)"]),
       attEl("div", { class: "meta" }, [n + " מפגשים" + (first ? " · מתחיל " + first : "")]),
       attEl("div", { class: "foot" }, [
-        attEl("span", { class: "att-chip" + (open ? "" : " closed") }, [open ? "הרשמה פתוחה" : "הרשמה סגורה"]),
+        (() => {
+          const st = attCourseStatus(c);
+          if (st === "active") return attEl("span", { class: "att-chip active", "data-status": "active" }, ["פעיל"]);
+          if (st === "ended") return attEl("span", { class: "att-chip ended", "data-status": "ended" }, ["הסתיים"]);
+          return attEl("span", { class: "att-chip" + (open ? "" : " closed"), "data-status": "upcoming" }, [open ? "הרשמה פתוחה" : "הרשמה סגורה"]);
+        })(),
         attIsAssigned(c) ? null : attEl("button", { class: "btn btn-sm att-assign-btn", title: "שם הקורס אינו ברשימה — לחצו לשיוך", onclick: (e) => { e.stopPropagation(); attOpenAssignModal(c); } }, ["לא משויך · שייך"]),
         attEl("button", { class: "btn btn-danger btn-sm", onclick: (e) => {
           e.stopPropagation();
