@@ -652,6 +652,13 @@
   .att-chip.active{ background:#FFF1B8; color:#7A5A00; }
   .att-chip.ended{ background:#D6EEFA; color:#14658F; }
 
+  /* ---- promotion note under the "passed" checkbox ---- */
+  .att-promo{ font-size:10.5px; font-weight:700; margin-top:3px; white-space:nowrap; }
+  .att-promo.applied{ color:var(--ok); }
+  .att-promo.same{ color:var(--text-soft); }
+  .att-promo.nomatch{ color:var(--replaced); }
+  .promo-select{ font-family:var(--display); font-size:13.5px; border:1px solid var(--border-strong); border-radius:var(--radius-sm); padding:6px 10px; background:var(--surface); color:var(--text); min-width:200px; }
+
 </style>
 </head>
 <body>
@@ -669,11 +676,12 @@
       <button class="tab active" data-view="main">סניפים</button>
       <button class="tab" data-view="settingsManagers" hidden>הגדרות מנהלים</button>
       <button class="tab" data-view="settingsBranches" hidden>הגדרות סניפים</button>
+      <button class="tab" data-view="settingsCourses" hidden>הגדרות קורסים</button>
       <button class="tab" data-view="orgChart">עץ ארגוני</button>
       <button class="tab" data-view="courseHours">מעקב שעות הדרכה</button>
       <button class="tab" data-view="attendance">ניהול קורסים</button>
     </div>
-    <div class="gear-wrap" id="gearWrap"><button class="gear-btn" id="gearBtn" title="הגדרות" aria-label="הגדרות">⚙</button><div class="gear-menu" id="gearMenu"><button data-go="settingsManagers">הגדרות מנהלים</button><button data-go="settingsBranches">הגדרות סניפים</button></div></div>
+    <div class="gear-wrap" id="gearWrap"><button class="gear-btn" id="gearBtn" title="הגדרות" aria-label="הגדרות">⚙</button><div class="gear-menu" id="gearMenu"><button data-go="settingsManagers">הגדרות מנהלים</button><button data-go="settingsBranches">הגדרות סניפים</button><button data-go="settingsCourses">הגדרות קורסים</button></div></div>
     <div class="conn-status" id="connStatus"><span class="conn-dot off"></span>מתחבר...</div>
     <div id="attUserBox" style="display:flex;align-items:center;gap:8px"></div>
   </div>
@@ -855,6 +863,10 @@
     <div id="attRoot"></div>
   </section>
 
+  <!-- ================= SETTINGS: COURSES (course -> promoted role) ================= -->
+  <section class="view" id="view-settingsCourses">
+    <div id="attPromoRoot"></div>
+  </section>
 </main>
 
 <div id="toast-wrap"></div>
@@ -1398,6 +1410,7 @@ function renderCurrentView() {
   else if (currentView === "orgChart") renderOrgChart();
   else if (currentView === "courseHours") renderCourseHours();
   else if (currentView === "attendance") renderAttendance();
+  else if (currentView === "settingsCourses") renderCoursePromotions();
 }
 
 /* ================= Helpers ================= */
@@ -2709,6 +2722,11 @@ async function importStaffFromRows(rows) {
         updatedAt: new Date().toISOString(),
         courses: existing?.courses || [],
       };
+      if (existing && existing.promotion && existing.promotion.to) {
+        // promoted by a course: the monthly file still shows the old role until HR updates it — keep the course role until then
+        if (payload.role === existing.promotion.from) payload.role = existing.promotion.to;
+        else payload.promotion = null;   // the file changed the role itself → the file wins
+      }
       batch.set(doc(staffCol, empId), payload, { merge: true });
       opCount++;
       if (opCount >= 400) { await batch.commit(); batch = writeBatch(db); opCount = 0; }
@@ -3206,6 +3224,7 @@ const att = {
   unsubParts: null,
   unsubDeleted: null,
   unsubFeedback: null,
+  promotions: [],          // [{name, role}] — which org-chart role each tracker course promotes to
   feedback: [],
   newSessions: 4,
   dirty: false,
@@ -3309,6 +3328,14 @@ function attParticipantHours(p, course) {
   return h;
 }
 const attTotalHours = (participants, course) => attRound2(participants.reduce((sum, p) => sum + attParticipantHours(p, course), 0));
+/* the hours tracker counts only employees of branches 500–599 (franchise / other branches don't count) */
+function attBranchNum(p) {
+  if (p.branchNumber !== null && p.branchNumber !== undefined && String(p.branchNumber).trim() !== "") return Number(p.branchNumber);
+  const m = String(p.branchName || "").match(/^\s*(\d+)/);
+  return m ? Number(m[1]) : NaN;
+}
+const attInTrackerRange = (p) => { const n = attBranchNum(p); return n >= 500 && n <= 599; };
+const attTrackerHours = (participants, course) => attTotalHours(participants.filter(attInTrackerRange), course);
 
 /* ---- tracker integration: month = month of the course's FIRST session; hours = sum of all participants' hours ---- */
 function attCourseYearMonth(course) {
@@ -3319,7 +3346,7 @@ function attCourseYearMonth(course) {
 }
 let attAutoCache = { key: null, map: null };
 function attAutoMap() {
-  const key = att.courses.map(c => `${c.id}|${c.name}|${c.totalHours || 0}|${(c.sessions || []).map(s => s.date).join(",")}`).join(";");
+  const key = att.courses.map(c => `${c.id}|${c.name}|${c.totalHours || 0}|${c.trackerHours === undefined ? "-" : c.trackerHours}|${(c.sessions || []).map(s => s.date).join(",")}`).join(";");
   if (attAutoCache.key === key) return attAutoCache.map;
   const map = {};
   att.courses.forEach(c => {
@@ -3327,7 +3354,7 @@ function attAutoMap() {
     if (!ym || !c.name) return;
     const k = `${ym.year}|${attNormName(c.name)}|${ym.month}`;
     const cur = map[k] || (map[k] = { count: 0, hours: 0 });
-    cur.count += 1; cur.hours = attRound2(cur.hours + (Number(c.totalHours) || 0));
+    cur.count += 1; cur.hours = attRound2(cur.hours + (Number(c.trackerHours !== undefined ? c.trackerHours : c.totalHours) || 0));   // trackerHours = branches 500–599 only
   });
   attAutoCache = { key, map };
   return map;
@@ -3342,6 +3369,7 @@ onSnapshot(attCoursesCol, (snap) => {
   att.courses = snap.docs.map(d => ({ id: d.id, ...d.data() }))
     .sort((a, b) => attMillis(b.createdAt) - attMillis(a.createdAt));
   att.coursesLoaded = true;
+  attBackfillTrackerHours();
   if (currentView === "attendance" && att.view !== "create") attRenderUnlessEditing();
   if (currentView === "courseHours") {
     const focusInTable = document.activeElement && document.activeElement.closest && document.activeElement.closest("#chTableWrap");
@@ -3372,10 +3400,11 @@ function attSyncTotalHours(courseId) {
   if (att.currentCourseId !== courseId) return;
   const course = att.courses.find(c => c.id === courseId);
   if (!course) return;
-  const total = attTotalHours(att.participants, course);
-  if (course.totalHours === undefined || Math.abs((Number(course.totalHours) || 0) - total) > 0.001) {
-    updateDoc(doc(db, "attCourses", courseId), { totalHours: total }).catch(e => console.warn("totalHours sync failed:", e.message));
-  }
+  const total = attTotalHours(att.participants, course), tracker = attTrackerHours(att.participants, course);
+  const upd = {};
+  if (course.totalHours === undefined || Math.abs((Number(course.totalHours) || 0) - total) > 0.001) upd.totalHours = total;
+  if (course.trackerHours === undefined || Math.abs((Number(course.trackerHours) || 0) - tracker) > 0.001) upd.trackerHours = tracker;
+  if (Object.keys(upd).length) updateDoc(doc(db, "attCourses", courseId), upd).catch(e => console.warn("hours sync failed:", e.message));
 }
 
 // don't wipe a note the user is typing: postpone re-render until the field loses focus
@@ -3393,7 +3422,7 @@ document.getElementById("attRoot").addEventListener("focusout", () => {
 // snapshot of the real branches, stored on the course so the public registration form needs no access to the branches collection
 const attBranchOptions = () => attBranches().map(b => ({ id: b.id, number: b.branchNumber, name: b.branchName }));
 async function attCreateCourse(name, sessions) {
-  await addDoc(attCoursesCol, { name, sessions, registrationOpen: true, totalHours: 0, branchOptions: attBranchOptions(), createdAt: serverTimestamp() });
+  await addDoc(attCoursesCol, { name, sessions, registrationOpen: true, totalHours: 0, trackerHours: 0, branchOptions: attBranchOptions(), createdAt: serverTimestamp() });
 }
 
 async function attDeleteSubcollection(courseId, sub) {
@@ -3513,6 +3542,15 @@ async function attExportExcel(onlyPassed) {
     header.push(label + " - התחלה", label + " - שעת התחלה", label + " - סיום", label + " - שעת סיום");
   });
   header.push("הערות", "חוות דעת", "עבר/ה את הקורס", "אחוז נוכחות", "סה\"כ שעות נוכחות");
+  if (onlyPassed) {   // title row: the name of the course the employees completed
+    const title = sheet.addRow(["מסיימי הקורס: " + (course.name || "")]);
+    sheet.mergeCells(1, 1, 1, header.length);
+    const tc = title.getCell(1);
+    tc.font = { bold: true, size: 16, color: { argb: "FF14213D" } };
+    tc.alignment = { horizontal: "center", vertical: "middle" };
+    tc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF1B8" } };
+    title.height = 30;
+  }
   const headerRow = sheet.addRow(header);
   headerRow.eachCell(cell => {
     cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -3739,7 +3777,7 @@ function attRenderDetail(host) {
   const sessions = course.sessions || [];
   const passedN = att.participants.filter(p => p.passed).length;
   attHeader(host, course.name || "(ללא שם)",
-    `${sessions.length} מפגשים · ${att.participants.length} משתתפים · ${passedN} עברו את הקורס · ${attTotalHours(att.participants, course)} שעות נוכחות`, [
+    `${sessions.length} מפגשים · ${att.participants.length} משתתפים · ${passedN} עברו את הקורס · ${attTotalHours(att.participants, course)} שעות נוכחות` + (attTrackerHours(att.participants, course) !== attTotalHours(att.participants, course) ? ` (${attTrackerHours(att.participants, course)} במעקב — סניפים 500–599)` : ""), [
     attEl("button", { class: "btn", onclick: attGoList }, ["← חזרה"]),
     attEl("button", { class: "btn btn-primary", id: "attAddParticipantBtn", onclick: () => attOpenParticipantModal(null) }, ["+ הוסף משתתף"]),
     attEl("button", { class: "btn", id: "attRegLinkBtn", onclick: attOpenRegLinkModal }, ["קישור הרשמה"]),
@@ -3803,8 +3841,18 @@ function attRenderDetail(host) {
     });
     const passBox = attEl("input", { type: "checkbox", class: "att-passed-box", title: "סימון עובד שעבר את הקורס" });
     passBox.checked = !!p.passed;
-    passBox.addEventListener("change", () => attUpdateField(cid, p.id, "passed", passBox.checked).catch(e => toast("שגיאה בעדכון: " + e.message, true)));
-    tr.appendChild(attEl("td", {}, [passBox]));
+    passBox.addEventListener("change", async () => {
+      const checked = passBox.checked;
+      try { await attUpdateField(cid, p.id, "passed", checked); await attApplyPromotion(course, p, checked); }
+      catch (e) { toast("שגיאה בעדכון: " + e.message, true); }
+    });
+    const pr = p.passed ? p.promoResult : null;
+    const promoNote = pr ? attEl("div", { class: "att-promo " + pr.status, "data-promo": pr.status,
+      title: pr.status === "applied" ? `תפקידו של ${pr.staffName || "העובד"} בעץ הארגוני עודכן ל${attRoleLabel(pr.role)}`
+        : pr.status === "same" ? "העובד כבר בתפקיד זה או בתפקיד גבוה ממנו — לא בוצע שינוי"
+        : "לא נמצא עובד תואם בעץ הארגוני (לפי שם וסניף) — התפקיד לא עודכן" },
+      [pr.status === "applied" ? "↑ " + attRoleLabel(pr.role) : pr.status === "same" ? "תפקיד קיים" : "⚠ לא בעץ"]) : null;
+    tr.appendChild(attEl("td", {}, [passBox, promoNote]));
     [["notes", "הערות..."], ["feedback", "חוות דעת..."]].forEach(([field, ph]) => {
       const ta = attEl("textarea", { rows: "1", placeholder: ph, "data-field": field });
       ta.value = p[field] || "";
@@ -4088,7 +4136,8 @@ async function attRunKorsimImport(email, password, overwrite, log) {
         return { id: pd.id, data: { ...data, branchId: br.branchId, branchNumber: br.branchNumber, branchName: br.branchName } };
       });
       const totalHours = attTotalHours(mapped.map(m => m.data), courseData);
-      await setDoc(doc(db, "attCourses", cd.id), { ...courseData, totalHours, importedFrom: "korsim", importedAt: serverTimestamp() });
+      const trackerHours = attTrackerHours(mapped.map(m => m.data), courseData);
+      await setDoc(doc(db, "attCourses", cd.id), { ...courseData, totalHours, trackerHours, importedFrom: "korsim", importedAt: serverTimestamp() });
       stats.courses++;
       let batch = writeBatch(db), n = 0;
       const flush = async (force) => { if (n >= 400 || (force && n)) { await batch.commit(); batch = writeBatch(db); n = 0; } };
@@ -4156,7 +4205,7 @@ function attOpenImportModal() {
     if (hidden) hidden.click();
   }));
   document.getElementById("tabs").addEventListener("click", () => {
-    btn.classList.toggle("active", currentView === "settingsManagers" || currentView === "settingsBranches");
+    btn.classList.toggle("active", currentView === "settingsManagers" || currentView === "settingsBranches" || currentView === "settingsCourses");
     menu.querySelectorAll("[data-go]").forEach(i => i.classList.toggle("active", i.dataset.go === currentView));
   });
 })();
@@ -4490,6 +4539,103 @@ async function attExportFeedback() {
   a.href = url; a.download = "משוב_" + (course.name || "קורס").replace(/[\\/:*?"<>|]/g, "_") + ".xlsx";
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/* ================= קידום תפקיד לפי קורס =================
+   הגדרות: לכל קורס מהרשימה (מעקב שעות הדרכה) אפשר להגדיר לאיזה תפקיד בעץ הארגוני הוא מקדם.
+   כשמסמנים עובד כ"עבר" — התפקיד שלו בעץ הארגוני (staff.role) משתנה אוטומטית. הסרת הסימון מחזירה את התפקיד הקודם. */
+const ATT_PROMO_ROLES = [["shift", "מנהל משמרת"], ["seniorShift", "מנהל משמרת בכיר"], ["deputy", "סגן מנהל סניף"]];
+const ATT_ROLE_RANK = { shift: 1, seniorShift: 2, deputy: 3, branchManager: 4 };
+const attRoleLabel = (k) => { const r = ATT_PROMO_ROLES.find(x => x[0] === k); return r ? r[1] : (k === "branchManager" ? "מנהל סניף" : String(k || "")); };
+
+onSnapshot(doc(db, "attSettings", "coursePromotions"), (snap) => {
+  const items = snap.exists() ? snap.data().items : null;
+  att.promotions = Array.isArray(items) ? items.filter(i => i && i.name && i.role) : [];
+  if (currentView === "settingsCourses") renderCoursePromotions();
+  else if (currentView === "attendance") attRenderUnlessEditing();
+}, (err) => console.warn("promotions listener:", err.message));
+
+function attPromotionRole(courseName) {
+  const it = att.promotions.find(x => attNormName(x.name) === attNormName(courseName));
+  return it ? it.role : null;
+}
+async function attSavePromotion(name, role) {
+  const items = att.promotions.filter(x => attNormName(x.name) !== attNormName(name));
+  if (role) items.push({ name, role });
+  await setDoc(doc(db, "attSettings", "coursePromotions"), { items, updatedAt: serverTimestamp() });
+}
+
+function renderCoursePromotions() {
+  const host = document.getElementById("attPromoRoot");
+  if (!host) return;
+  host.innerHTML = "";
+  host.appendChild(attEl("h1", { class: "page-title" }, ["הגדרות קורסים"]));
+  host.appendChild(attEl("p", { class: "page-sub" }, ["לכל קורס מרשימת הקורסים (מעקב שעות הדרכה) אפשר להגדיר לאיזה תפקיד בעץ הארגוני הוא מקדם. כשמסמנים עובד כ\"עבר\" בקורס, תפקידו בעץ הארגוני משתנה אוטומטית לתפקיד שהוגדר (לפי שם וסניף); הסרת הסימון מחזירה את התפקיד הקודם. התפקיד לא יורד בדרגה — עובד שכבר בתפקיד שווה או גבוה לא משתנה. ההגדרה חלה על סימונים חדשים בלבד."]));
+  const names = attCourseNameOptions();
+  if (!names.length) { host.appendChild(attEl("div", { class: "card empty-state" }, ["אין עדיין קורסים ברשימה. יש להוסיף שם קורס בטבלה במסך 'מעקב שעות הדרכה'."])); return; }
+  const tbody = attEl("tbody");
+  names.forEach((n, i) => {
+    const sel = attEl("select", { id: "promo_" + i, class: "promo-select", "data-course": n }, [attEl("option", { value: "" }, ["ללא שינוי תפקיד"])]
+      .concat(ATT_PROMO_ROLES.map(([k, l]) => attEl("option", { value: k }, [l]))));
+    sel.value = attPromotionRole(n) || "";
+    sel.addEventListener("change", async () => {
+      try { await attSavePromotion(n, sel.value); toast(sel.value ? `"${n}" יקדם ל${attRoleLabel(sel.value)}` : `"${n}" — ללא שינוי תפקיד`); }
+      catch (e) { toast("שגיאה בשמירה: " + e.message, true); }
+    });
+    tbody.appendChild(attEl("tr", {}, [attEl("td", { class: "name-cell" }, [n]), attEl("td", {}, [sel])]));
+  });
+  host.appendChild(attEl("div", { class: "att-table-wrap", style: "max-width:640px" }, [
+    attEl("table", { class: "att-table", style: "min-width:0" }, [attEl("thead", {}, [attEl("tr", {}, [attEl("th", {}, ["קורס"]), attEl("th", {}, ["מקדם לתפקיד"])])]), tbody])]));
+}
+
+// match a course participant to the org-chart staff record (the staff key is not the ID number, so: name + branch, both name orders)
+function attFindStaffForParticipant(p) {
+  const f = (p.firstName || "").trim(), l = (p.lastName || "").trim();
+  const bn = (p.branchNumber !== null && p.branchNumber !== undefined) ? p.branchNumber : attBranchNum(p);
+  return findStaffMatch(`${f} ${l}`, bn) || findStaffMatch(`${l} ${f}`, bn);
+}
+async function attApplyPromotion(course, p, passed) {
+  const pref = doc(db, "attCourses", course.id, "participants", p.id);
+  const now = new Date().toISOString();
+  if (!passed) {   // un-marking: undo the promotion that THIS participant/course caused
+    const s = staffAll.find(x => x.promotion && x.promotion.participantId === p.id && x.promotion.courseId === course.id);
+    if (s) {
+      await updateDoc(doc(db, "staff", s.id), { role: s.promotion.from, promotion: null, updatedAt: now });
+      toast(`התפקיד של ${s.name} הוחזר ל${attRoleLabel(s.promotion.from)}`);
+    }
+    if (p.promoResult) await updateDoc(pref, { promoResult: null });
+    return;
+  }
+  const role = attPromotionRole(course.name);
+  if (!role) return;
+  const s = attFindStaffForParticipant(p);
+  if (!s || !isActiveStaff(s)) {
+    await updateDoc(pref, { promoResult: { status: "nomatch", role } });
+    toast("סומן כעבר, אך לא נמצא עובד תואם בעץ הארגוני (לפי שם וסניף) — התפקיד לא עודכן", true);
+    return;
+  }
+  if ((ATT_ROLE_RANK[s.role] || 0) >= (ATT_ROLE_RANK[role] || 0)) {
+    await updateDoc(pref, { promoResult: { status: "same", role, staffId: s.id, staffName: s.name } });
+    toast(`${s.name} כבר בתפקיד ${attRoleLabel(s.role)} — לא בוצע שינוי`);
+    return;
+  }
+  const from = (s.promotion && s.promotion.from) ? s.promotion.from : s.role;
+  await updateDoc(doc(db, "staff", s.id), { role, promotion: { from, to: role, courseId: course.id, courseName: course.name || "", participantId: p.id, at: now }, updatedAt: now });
+  await updateDoc(pref, { promoResult: { status: "applied", role, staffId: s.id, staffName: s.name } });
+  toast(`${s.name} קודם/ה ל${attRoleLabel(role)} בעץ הארגוני`);
+}
+
+// courses saved before the 500–599 rule have no trackerHours yet: compute it once from their participants
+const attBackfilled = new Set();
+async function attBackfillTrackerHours() {
+  for (const c of att.courses) {
+    if (c.trackerHours !== undefined || attBackfilled.has(c.id)) continue;
+    attBackfilled.add(c.id);
+    try {
+      const snap = await getDocs(collection(db, "attCourses", c.id, "participants"));
+      await updateDoc(doc(db, "attCourses", c.id), { trackerHours: attTrackerHours(snap.docs.map(d => d.data()), c) });
+    } catch (e) { console.warn("trackerHours backfill failed:", c.id, e.message); }
+  }
 }
 
 </script>
